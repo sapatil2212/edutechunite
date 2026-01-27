@@ -1,0 +1,388 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import prisma from '@/lib/prisma'
+
+// GET: List assignments
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.schoolId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const academicYearId = searchParams.get('academicYearId')
+    const academicUnitId = searchParams.get('academicUnitId')
+    const subjectId = searchParams.get('subjectId')
+    const status = searchParams.get('status')
+    const type = searchParams.get('type')
+    const createdById = searchParams.get('createdById')
+    const search = searchParams.get('search')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const skip = (page - 1) * limit
+    const role = session.user.role
+
+    // Build where clause
+    const where: any = {
+      schoolId: session.user.schoolId,
+    }
+
+    // Role-based filtering
+    if (role === 'TEACHER') {
+      // Teachers see only their own assignments
+      const teacher = await prisma.teacher.findFirst({
+        where: { userId: session.user.id },
+      })
+      if (teacher) {
+        where.createdById = teacher.id
+      }
+    } else if (role === 'STUDENT') {
+      // Students see only published assignments for their class
+      const student = await prisma.student.findFirst({
+        where: { userId: session.user.id },
+      })
+      if (student) {
+        where.status = 'PUBLISHED'
+        where.OR = [
+          { academicUnitId: student.academicUnitId },
+          { sectionId: student.academicUnitId },
+        ]
+      }
+    }
+
+    // Additional filters
+    if (academicYearId) {
+      where.academicYearId = academicYearId
+    }
+
+    if (academicUnitId) {
+      where.academicUnitId = academicUnitId
+    }
+
+    if (subjectId) {
+      where.subjectId = subjectId
+    }
+
+    if (status && role !== 'STUDENT') {
+      where.status = status
+    }
+
+    if (type) {
+      where.type = type
+    }
+
+    if (createdById) {
+      where.createdById = createdById
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search } },
+        { description: { contains: search } },
+      ]
+    }
+
+    // Get total count
+    const total = await prisma.assignment.count({ where })
+
+    // Get assignments with pagination
+    const assignments = await prisma.assignment.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        type: true,
+        category: true,
+        submissionMode: true,
+        maxMarks: true,
+        dueDate: true,
+        dueTime: true,
+        status: true,
+        publishedAt: true,
+        scheduledFor: true,
+        allowLateSubmission: true,
+        allowResubmission: true,
+        createdAt: true,
+        academicYear: {
+          select: { id: true, name: true },
+        },
+        academicUnit: {
+          select: { id: true, name: true, type: true },
+        },
+        section: {
+          select: { id: true, name: true },
+        },
+        subject: {
+          select: { id: true, name: true, code: true, color: true },
+        },
+        createdBy: {
+          select: { id: true, fullName: true },
+        },
+        _count: {
+          select: {
+            submissions: true,
+            attachments: true,
+          },
+        },
+      },
+      orderBy: [
+        { dueDate: 'asc' },
+        { createdAt: 'desc' },
+      ],
+      skip,
+      take: limit,
+    })
+
+    // For teachers, get submission stats
+    let assignmentsWithStats = assignments
+    if (role === 'TEACHER' || role === 'SCHOOL_ADMIN') {
+      assignmentsWithStats = await Promise.all(
+        assignments.map(async (assignment) => {
+          // Get total students in the class
+          const studentCount = await prisma.student.count({
+            where: {
+              OR: [
+                { academicUnitId: assignment.academicUnit.id },
+                ...(assignment.section ? [{ academicUnitId: assignment.section.id }] : []),
+              ],
+              status: 'ACTIVE',
+            },
+          })
+
+          // Get submission counts
+          const submittedCount = await prisma.assignmentSubmission.count({
+            where: {
+              assignmentId: assignment.id,
+              status: { in: ['SUBMITTED', 'LATE', 'EVALUATED'] },
+            },
+          })
+
+          const evaluatedCount = await prisma.assignmentSubmission.count({
+            where: {
+              assignmentId: assignment.id,
+              status: 'EVALUATED',
+            },
+          })
+
+          return {
+            ...assignment,
+            stats: {
+              totalStudents: studentCount,
+              submitted: submittedCount,
+              evaluated: evaluatedCount,
+              pending: studentCount - submittedCount,
+              submissionRate: studentCount > 0 ? Math.round((submittedCount / studentCount) * 100) : 0,
+            },
+          }
+        })
+      )
+    }
+
+    return NextResponse.json({
+      assignments: assignmentsWithStats,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    })
+  } catch (error) {
+    console.error('Error fetching assignments:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch assignments' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST: Create a new assignment
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.schoolId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Only SCHOOL_ADMIN, SUPER_ADMIN, and TEACHER can create assignments
+    if (!['SCHOOL_ADMIN', 'SUPER_ADMIN', 'TEACHER'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await req.json()
+    
+    // Get teacher profile
+    let teacherId: string | null = null
+    if (session.user.role === 'TEACHER') {
+      const teacher = await prisma.teacher.findFirst({
+        where: { userId: session.user.id },
+      })
+      if (!teacher) {
+        return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 })
+      }
+      teacherId = teacher.id
+    } else {
+      // For admin, they must specify a teacher or we use a default
+      if (body.createdById) {
+        teacherId = body.createdById
+      } else {
+        // Get first teacher in the school as fallback
+        const teacher = await prisma.teacher.findFirst({
+          where: { schoolId: session.user.schoolId },
+        })
+        if (teacher) {
+          teacherId = teacher.id
+        }
+      }
+    }
+
+    if (!teacherId) {
+      return NextResponse.json({ error: 'Teacher ID required' }, { status: 400 })
+    }
+
+    let {
+      title,
+      description,
+      instructions,
+      academicYearId,
+      academicUnitId,
+      sectionId,
+      subjectId,
+      type = 'HOMEWORK',
+      category = 'INDIVIDUAL',
+      submissionMode = 'ONLINE',
+      maxMarks,
+      dueDate,
+      dueTime,
+      status = 'DRAFT',
+      scheduledFor,
+      allowLateSubmission = false,
+      allowResubmission = false,
+      resubmissionDeadline,
+      attachments = [],
+    } = body
+
+    // Handle "current" academic year
+    if (academicYearId === 'current') {
+      const currentYear = await prisma.academicYear.findFirst({
+        where: {
+          schoolId: session.user.schoolId,
+          isCurrent: true,
+        },
+      })
+      if (!currentYear) {
+        return NextResponse.json({ error: 'Current academic year not found' }, { status: 404 })
+      }
+      academicYearId = currentYear.id
+    }
+
+    // Validate required fields
+    if (!title || !academicYearId || !academicUnitId || !dueDate) {
+      return NextResponse.json(
+        { error: 'Missing required fields: title, academicYearId, academicUnitId, and dueDate are required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate academic unit belongs to this school
+    const academicUnit = await prisma.academicUnit.findFirst({
+      where: {
+        id: academicUnitId,
+        schoolId: session.user.schoolId,
+      },
+    })
+
+    if (!academicUnit) {
+      return NextResponse.json({ error: 'Academic unit not found' }, { status: 404 })
+    }
+
+    // Create assignment with transaction
+    const assignment = await prisma.$transaction(async (tx) => {
+      // Create the assignment
+      const newAssignment = await tx.assignment.create({
+        data: {
+          schoolId: session.user.schoolId!,
+          academicYearId,
+          academicUnitId,
+          sectionId: sectionId || null,
+          subjectId: subjectId || null,
+          createdById: teacherId!,
+          title,
+          description,
+          instructions,
+          type,
+          category,
+          submissionMode,
+          maxMarks: maxMarks ? parseInt(maxMarks) : null,
+          dueDate: new Date(dueDate),
+          dueTime: dueTime || null,
+          status,
+          publishedAt: status === 'PUBLISHED' ? new Date() : null,
+          scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+          allowLateSubmission,
+          allowResubmission,
+          resubmissionDeadline: resubmissionDeadline ? new Date(resubmissionDeadline) : null,
+        },
+        include: {
+          academicYear: true,
+          academicUnit: true,
+          section: true,
+          subject: true,
+          createdBy: true,
+        },
+      })
+
+      // Create attachments if provided
+      if (attachments && attachments.length > 0) {
+        await tx.assignmentAttachment.createMany({
+          data: attachments.map((attachment: any, index: number) => ({
+            assignmentId: newAssignment.id,
+            type: attachment.type || 'FILE',
+            url: attachment.url,
+            fileName: attachment.fileName,
+            fileSize: attachment.fileSize,
+            mimeType: attachment.mimeType,
+            displayOrder: index,
+          })),
+        })
+      }
+
+      // If published, create pending submissions for all students in the class
+      if (status === 'PUBLISHED') {
+        const targetUnitId = sectionId || academicUnitId
+        const students = await tx.student.findMany({
+          where: {
+            academicUnitId: targetUnitId,
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        })
+
+        if (students.length > 0) {
+          await tx.assignmentSubmission.createMany({
+            data: students.map((student) => ({
+              assignmentId: newAssignment.id,
+              studentId: student.id,
+              status: 'PENDING',
+            })),
+          })
+        }
+      }
+
+      return newAssignment
+    })
+
+    return NextResponse.json({ assignment }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating assignment:', error)
+    return NextResponse.json(
+      { error: 'Failed to create assignment' },
+      { status: 500 }
+    )
+  }
+}
