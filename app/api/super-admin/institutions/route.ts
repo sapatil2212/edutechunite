@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
 import prisma from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const JWT_SECRET = process.env.JWT_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim()
 
 // Middleware to verify super admin
