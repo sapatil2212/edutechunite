@@ -108,7 +108,7 @@ export default function TeacherSubjectsPage() {
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-primary-700 transition-colors">
                     {subject.name}
                   </h3>
-                  <Badge variant="outline" className="mb-6 capitalize">
+                  <Badge className="mb-6 capitalize">
                     {subject.type.toLowerCase()} Subject
                   </Badge>
 

@@ -27,7 +27,7 @@ export async function GET(
     const course = await prisma.course.findFirst({
       where: {
         id: params.id,
-        schoolId: user?.schoolId,
+        schoolId: user?.schoolId!,
       },
       include: {
         academicUnits: {
@@ -114,7 +114,7 @@ export async function PUT(
     const existing = await prisma.course.findFirst({
       where: {
         id: params.id,
-        schoolId: user.schoolId,
+        schoolId: user.schoolId!,
       },
     })
 
@@ -185,7 +185,7 @@ export async function DELETE(
     const course = await prisma.course.findFirst({
       where: {
         id: params.id,
-        schoolId: user.schoolId,
+        schoolId: user.schoolId!,
       },
       include: {
         _count: {

@@ -16,7 +16,10 @@ import {
   Upload,
   X,
   Camera,
+  DollarSign,
 } from 'lucide-react'
+import { StudentFeeOnboarding } from '@/components/onboarding/StudentFeeOnboarding'
+import { PaymentCollectionOnboarding } from '@/components/onboarding/PaymentCollectionOnboarding'
 import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
 import { Button } from '@/components/ui/button'
@@ -58,6 +61,19 @@ export default function AddStudentPage() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  
+  // Fee structure and payment state
+  const [feeData, setFeeData] = useState<any>(null)
+  const [paymentData, setPaymentData] = useState<any>(null)
+  const [successMessage, setSuccessMessage] = useState('')
+  
+  // Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [createdStudentData, setCreatedStudentData] = useState<{
+    studentName: string
+    admissionNumber: string
+    receiptNumber?: string
+  } | null>(null)
 
   const [formData, setFormData] = useState({
     admissionNumber: generateStudentId(),
@@ -272,6 +288,9 @@ export default function AddStudentPage() {
             occupation: formData.guardianOccupation || undefined,
           }
         ] : undefined,
+        // Fee structure and payment data
+        feeData: feeData || undefined,
+        paymentData: paymentData || undefined,
       }
 
       const res = await fetch('/api/institution/students', {
@@ -286,7 +305,14 @@ export default function AddStudentPage() {
         throw new Error(data.error || 'Failed to create student')
       }
 
-      router.push('/dashboard/students')
+      // Show success modal with student details and receipt info
+      const studentFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(' ')
+      setCreatedStudentData({
+        studentName: studentFullName,
+        admissionNumber: formData.admissionNumber,
+        receiptNumber: data.receiptNumber || undefined
+      })
+      setShowSuccessModal(true)
     } catch (err: any) {
       setError(err.message || 'Failed to create student')
     } finally {
@@ -328,6 +354,19 @@ export default function AddStudentPage() {
                 <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                   <AlertCircle className="w-5 h-5" />
                   <p className="text-sm font-medium">{error}</p>
+                </div>
+              </motion.div>
+            )}
+
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl"
+              >
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <p className="text-sm font-medium">{successMessage}</p>
                 </div>
               </motion.div>
             )}
@@ -637,6 +676,46 @@ export default function AddStudentPage() {
                     </div>
                   </div>
                 </motion.div>
+
+                {/* Fee Structure Section - Shows when class is selected */}
+                {formData.academicYearId && formData.academicUnitId && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-700 p-6"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
+                        <DollarSign className="w-5 h-5 text-green-500" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          Fee Structure & Payment
+                        </h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Fee structure is auto-loaded based on selected class
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <StudentFeeOnboarding
+                        academicYearId={formData.academicYearId}
+                        classId={formData.academicUnitId}
+                        sectionId={formData.sectionId || undefined}
+                        onFeeDataChange={setFeeData}
+                      />
+
+                      {feeData && feeData.feeStructureId && (
+                        <PaymentCollectionOnboarding
+                          finalAmount={feeData.finalAmount}
+                          onPaymentDataChange={setPaymentData}
+                        />
+                      )}
+                    </div>
+                  </motion.div>
+                )}
 
                 {/* Contact Information */}
                 <motion.div
@@ -967,6 +1046,97 @@ export default function AddStudentPage() {
           </form>
         </div>
       </main>
+
+      {/* Success Modal */}
+      {showSuccessModal && createdStudentData && (
+        <>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div className="w-full max-w-md bg-white dark:bg-dark-800 rounded-2xl shadow-xl p-8">
+              {/* Success Icon */}
+              <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600 dark:text-green-400" />
+              </div>
+
+              {/* Success Message */}
+              <h3 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2">
+                Student Admitted Successfully!
+              </h3>
+              
+              <div className="text-center mb-6">
+                <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                  {createdStudentData.studentName}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Admission No: {createdStudentData.admissionNumber}
+                </p>
+                {createdStudentData.receiptNumber && (
+                  <p className="text-sm text-green-600 dark:text-green-400 mt-2">
+                    Receipt: {createdStudentData.receiptNumber}
+                  </p>
+                )}
+              </div>
+
+              {/* Fee Summary if payment was collected */}
+              {createdStudentData.receiptNumber && feeData && (
+                <div className="bg-gray-50 dark:bg-dark-700 rounded-lg p-4 mb-6">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-600 dark:text-gray-400">Total Fee:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      ₹{feeData.totalAmount?.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  {feeData.discountAmount > 0 && (
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-gray-600 dark:text-gray-400">Discount:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        -₹{feeData.discountAmount?.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  )}
+                  {paymentData && (
+                    <div className="flex justify-between text-sm pt-2 border-t border-gray-200 dark:border-dark-600">
+                      <span className="text-gray-600 dark:text-gray-400">Amount Paid:</span>
+                      <span className="font-bold text-primary">
+                        ₹{paymentData.amountCollected?.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                {createdStudentData.receiptNumber && (
+                  <Button
+                    onClick={() => {
+                      router.push(`/dashboard/finance/receipts/${createdStudentData.receiptNumber}`)
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Print Receipt
+                  </Button>
+                )}
+                <Button
+                  onClick={() => {
+                    setShowSuccessModal(false)
+                    router.push('/dashboard/students')
+                  }}
+                  className="flex-1"
+                >
+                  OK
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
     </div>
   )
 }

@@ -1736,7 +1736,7 @@ model Notification {
 }
 
 // ============================================
-// FEE MODULE (View Only for Students/Parents)
+// FINANCE MODULE (COMPLETE)
 // ============================================
 
 enum FeeType {
@@ -1750,7 +1750,18 @@ enum FeeType {
   ACTIVITY
   UNIFORM
   BOOKS
+  SPORTS
+  MISCELLANEOUS
   OTHER
+}
+
+enum FeeFrequency {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  ANNUAL
+  CUSTOM
 }
 
 enum PaymentStatus {
@@ -1759,16 +1770,65 @@ enum PaymentStatus {
   PAID
   OVERDUE
   WAIVED
+  CANCELLED
 }
 
 enum PaymentMethod {
   CASH
   CHEQUE
+  DEMAND_DRAFT
   BANK_TRANSFER
   ONLINE
   UPI
   CARD
+  NET_BANKING
 }
+
+enum PaymentGatewayStatus {
+  INITIATED
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum ScholarshipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  EXPIRED
+}
+
+enum RefundStatus {
+  INITIATED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PROCESSED
+  COMPLETED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  GENERATED
+  SENT
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+// ============================================
+// FEE STRUCTURE SETUP
+// ============================================
 
 model FeeStructure {
   id              String        @id @default(cuid())
@@ -1780,33 +1840,106 @@ model FeeStructure {
   // Academic context
   academicYearId  String
   academicYear    AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  academicUnitId  String?       // If class-specific, null for all classes
+  
+  // Applicable to (hierarchical)
+  courseId        String?       // If course-specific
+  academicUnitId  String?       // If class/section-specific
   academicUnit    AcademicUnit? @relation(fields: [academicUnitId], references: [id], onDelete: SetNull)
   
-  // Fee details
-  name            String        @db.VarChar(255)
-  feeType         FeeType       @default(TUITION)
-  amount          Float
+  // Structure details
+  name            String        @db.VarChar(255)  // e.g., "Class 10 - Science Stream Fee Structure 2024-25"
+  description     String?       @db.Text
   
-  // Schedule
-  dueDate         DateTime?
-  frequency       String?       @db.VarChar(50)   // Monthly, Quarterly, Yearly, One-time
-  
-  // Settings
-  isOptional      Boolean       @default(false)
+  // Status
   isActive        Boolean       @default(true)
+  isLocked        Boolean       @default(false)   // Cannot be modified once students are assigned
+  
+  // Metadata
+  createdBy       String?       // User ID
+  approvedBy      String?       // User ID
+  approvedAt      DateTime?
   
   // Timestamps
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
   // Relations
-  feeAssignments  StudentFee[]
+  components      FeeComponent[]
+  studentFees     StudentFee[]
   
+  @@unique([schoolId, academicYearId, name])
   @@index([schoolId, academicYearId])
   @@index([academicUnitId])
+  @@index([isActive])
   @@map("fee_structures")
 }
+
+model FeeComponent {
+  id              String        @id @default(cuid())
+  
+  // Fee Structure
+  feeStructureId  String
+  feeStructure    FeeStructure  @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  
+  // Component details
+  name            String        @db.VarChar(255)  // e.g., "Tuition Fee", "Lab Fee"
+  feeType         FeeType       @default(TUITION)
+  description     String?       @db.Text
+  
+  // Amount
+  amount          Float
+  
+  // Frequency & Schedule
+  frequency       FeeFrequency  @default(ONE_TIME)
+  isMandatory     Boolean       @default(true)
+  
+  // Due dates (can have multiple installments)
+  dueDate         DateTime?     // Primary due date
+  
+  // Settings
+  allowPartialPayment Boolean   @default(true)
+  lateFeeApplicable   Boolean   @default(false)
+  lateFeeAmount       Float?
+  lateFeePercentage   Float?    // Percentage per day/month
+  
+  // Display order
+  displayOrder    Int           @default(0)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  installments    FeeInstallment[]
+  
+  @@index([feeStructureId])
+  @@map("fee_components")
+}
+
+model FeeInstallment {
+  id              String        @id @default(cuid())
+  
+  // Fee Component
+  feeComponentId  String
+  feeComponent    FeeComponent  @relation(fields: [feeComponentId], references: [id], onDelete: Cascade)
+  
+  // Installment details
+  installmentNumber Int         // 1, 2, 3, etc.
+  name            String        @db.VarChar(100)  // e.g., "1st Installment", "January Fee"
+  amount          Float
+  dueDate         DateTime
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  
+  @@unique([feeComponentId, installmentNumber])
+  @@index([feeComponentId])
+  @@map("fee_installments")
+}
+
+// ============================================
+// STUDENT FEE ASSIGNMENT
+// ============================================
 
 model StudentFee {
   id              String          @id @default(cuid())
@@ -1823,61 +1956,510 @@ model StudentFee {
   feeStructureId  String
   feeStructure    FeeStructure    @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
   
-  // Amount details
-  totalAmount     Float
+  // Academic context
+  academicYearId  String
+  
+  // Amount breakdown
+  totalAmount     Float           // Original total
   discountAmount  Float           @default(0)
+  scholarshipAmount Float         @default(0)
+  taxAmount       Float           @default(0)
+  finalAmount     Float           // After discounts/scholarships
   paidAmount      Float           @default(0)
-  balanceAmount   Float
+  balanceAmount   Float           // Remaining to be paid
   
   // Status
   status          PaymentStatus   @default(PENDING)
   dueDate         DateTime?
+  
+  // Payment plan
+  isCustomPlan    Boolean         @default(false)
+  customPlanDetails Json?         // Custom installment details
+  
+  // Assignment details
+  assignedBy      String?         // User ID
+  assignedAt      DateTime        @default(now())
+  
+  // Override flag (manual adjustment)
+  isOverridden    Boolean         @default(false)
+  overrideReason  String?         @db.Text
   
   // Timestamps
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   
   // Relations
-  payments        FeePayment[]
+  payments        Payment[]
+  discounts       FeeDiscount[]
+  scholarships    FeeScholarship[]
+  invoices        Invoice[]
   
   @@unique([studentId, feeStructureId])
   @@index([schoolId])
   @@index([studentId])
   @@index([status])
+  @@index([academicYearId])
+  @@index([dueDate])
   @@map("student_fees")
 }
 
-model FeePayment {
+// ============================================
+// PAYMENT MANAGEMENT
+// ============================================
+
+model Payment {
   id              String          @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
   
   // Student Fee
   studentFeeId    String
   studentFee      StudentFee      @relation(fields: [studentFeeId], references: [id], onDelete: Cascade)
   
+  // Student reference (denormalized for quick access)
+  studentId       String
+  
   // Payment details
   amount          Float
   paymentMethod   PaymentMethod   @default(CASH)
-  transactionId   String?         @db.VarChar(100)
+  
+  // Transaction details
+  transactionId   String?         @db.VarChar(100)  // Bank/Gateway transaction ID
+  transactionDate DateTime?
+  referenceNumber String?         @db.VarChar(100)  // Cheque/DD number
+  
+  // Bank details (for cheque/DD/transfer)
+  bankName        String?         @db.VarChar(100)
+  branchName      String?         @db.VarChar(100)
+  
+  // Online payment gateway details
+  gatewayStatus   PaymentGatewayStatus?
+  gatewayResponse Json?           // Full gateway response
   
   // Receipt
-  receiptNumber   String?         @db.VarChar(50)
+  receiptNumber   String          @unique @db.VarChar(50)
   receiptUrl      String?         @db.VarChar(500)
+  receiptGeneratedAt DateTime?
+  
+  // Payment allocation (which fee components this payment covers)
+  allocationDetails Json?         // [{componentId, componentName, amount}]
+  
+  // Late fee
+  lateFeeAmount   Float           @default(0)
   
   // Payment date
   paidAt          DateTime        @default(now())
   
   // Recorded by
-  recordedBy      String?
+  recordedBy      String?         // User ID
+  
+  // Approval workflow (for offline payments)
+  requiresApproval Boolean        @default(false)
+  approvalStatus  String?         @db.VarChar(20)  // PENDING, APPROVED, REJECTED
+  approvedBy      String?
+  approvedAt      DateTime?
+  
+  // Reconciliation
+  isReconciled    Boolean         @default(false)
+  reconciledBy    String?
+  reconciledAt    DateTime?
+  
+  // Status
+  status          String          @default("SUCCESS") @db.VarChar(20)  // SUCCESS, FAILED, PENDING, CANCELLED
   
   // Notes
-  remarks         String?         @db.VarChar(255)
+  remarks         String?         @db.Text
+  
+  // Reversal tracking
+  isReversed      Boolean         @default(false)
+  reversalReason  String?         @db.Text
+  reversedBy      String?
+  reversedAt      DateTime?
   
   // Timestamps
   createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   
+  // Relations
+  refunds         Refund[]
+  auditLogs       FinanceAuditLog[]
+  
+  @@index([schoolId])
   @@index([studentFeeId])
+  @@index([studentId])
   @@index([paidAt])
-  @@map("fee_payments")
+  @@index([receiptNumber])
+  @@index([status])
+  @@index([paymentMethod])
+  @@map("payments")
+}
+
+// ============================================
+// DISCOUNTS & SCHOLARSHIPS
+// ============================================
+
+model FeeDiscount {
+  id              String          @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  
+  // Student Fee
+  studentFeeId    String
+  studentFee      StudentFee      @relation(fields: [studentFeeId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  
+  // Discount details
+  name            String          @db.VarChar(255)  // e.g., "Sibling Discount", "Early Bird Discount"
+  description     String?         @db.Text
+  discountType    DiscountType    @default(PERCENTAGE)
+  
+  // Amount
+  discountValue   Float           // Percentage or fixed amount
+  discountAmount  Float           // Calculated discount amount
+  
+  // Applicability
+  applicableComponents Json?      // Array of fee component IDs (null = all components)
+  
+  // Frequency
+  isRecurring     Boolean         @default(false)
+  recurringMonths Int?            // How many months/terms
+  
+  // Approval
+  reason          String          @db.Text
+  approvedBy      String?         // User ID
+  approvedAt      DateTime?
+  
+  // Status
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  auditLogs       FinanceAuditLog[]
+  
+  @@index([schoolId])
+  @@index([studentFeeId])
+  @@index([studentId])
+  @@map("fee_discounts")
+}
+
+model FeeScholarship {
+  id              String            @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  
+  // Student Fee
+  studentFeeId    String
+  studentFee      StudentFee        @relation(fields: [studentFeeId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  
+  // Scholarship details
+  name            String            @db.VarChar(255)  // e.g., "Merit Scholarship", "Need-based Aid"
+  description     String?           @db.Text
+  scholarshipType DiscountType      @default(PERCENTAGE)
+  
+  // Amount
+  scholarshipValue Float             // Percentage or fixed amount
+  scholarshipAmount Float            // Calculated scholarship amount
+  
+  // Provider
+  provider        String?           @db.VarChar(255)  // Government/Trust/Institution
+  referenceNumber String?           @db.VarChar(100)
+  
+  // Validity
+  validFrom       DateTime
+  validTo         DateTime?
+  
+  // Applicability
+  applicableComponents Json?        // Array of fee component IDs
+  
+  // Status
+  status          ScholarshipStatus @default(PENDING)
+  
+  // Approval workflow
+  appliedBy       String?           // User ID
+  appliedAt       DateTime          @default(now())
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?           @db.Text
+  
+  // Supporting documents
+  documents       Json?             // [{name, url, type}]
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relations
+  auditLogs       FinanceAuditLog[]
+  
+  @@index([schoolId])
+  @@index([studentFeeId])
+  @@index([studentId])
+  @@index([status])
+  @@map("fee_scholarships")
+}
+
+// ============================================
+// REFUNDS
+// ============================================
+
+model Refund {
+  id              String          @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  
+  // Original Payment
+  paymentId       String
+  payment         Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  
+  // Refund details
+  refundAmount    Float
+  refundReason    String          @db.Text
+  refundType      String          @db.VarChar(50)  // ADMISSION_CANCELLATION, DUPLICATE_PAYMENT, OVERPAYMENT, OTHER
+  
+  // Refund method
+  refundMethod    PaymentMethod   @default(BANK_TRANSFER)
+  
+  // Bank details (for refund transfer)
+  accountHolderName String?       @db.VarChar(255)
+  accountNumber   String?         @db.VarChar(50)
+  ifscCode        String?         @db.VarChar(20)
+  bankName        String?         @db.VarChar(100)
+  
+  // Transaction details
+  transactionId   String?         @db.VarChar(100)
+  transactionDate DateTime?
+  
+  // Status
+  status          RefundStatus    @default(INITIATED)
+  
+  // Workflow
+  initiatedBy     String          // User ID
+  initiatedAt     DateTime        @default(now())
+  approvedBy      String?
+  approvedAt      DateTime?
+  processedBy     String?
+  processedAt     DateTime?
+  completedAt     DateTime?
+  
+  // Rejection
+  rejectionReason String?         @db.Text
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  
+  // Supporting documents
+  documents       Json?           // [{name, url, type}]
+  
+  // Notes
+  remarks         String?         @db.Text
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  auditLogs       FinanceAuditLog[]
+  
+  @@index([schoolId])
+  @@index([paymentId])
+  @@index([studentId])
+  @@index([status])
+  @@map("refunds")
+}
+
+// ============================================
+// INVOICES & RECEIPTS
+// ============================================
+
+model Invoice {
+  id              String          @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  
+  // Student Fee
+  studentFeeId    String
+  studentFee      StudentFee      @relation(fields: [studentFeeId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  
+  // Invoice details
+  invoiceNumber   String          @unique @db.VarChar(50)
+  invoiceDate     DateTime        @default(now())
+  dueDate         DateTime?
+  
+  // Amounts
+  subtotal        Float
+  discountAmount  Float           @default(0)
+  taxAmount       Float           @default(0)
+  totalAmount     Float
+  paidAmount      Float           @default(0)
+  balanceAmount   Float
+  
+  // Tax details (GST/VAT)
+  taxPercentage   Float?
+  taxNumber       String?         @db.VarChar(50)  // GSTIN
+  
+  // Line items
+  lineItems       Json            // [{description, feeType, amount, quantity}]
+  
+  // Status
+  status          InvoiceStatus   @default(GENERATED)
+  
+  // PDF generation
+  pdfUrl          String?         @db.VarChar(500)
+  pdfGeneratedAt  DateTime?
+  
+  // Sent details
+  sentTo          String?         @db.VarChar(255)  // Email
+  sentAt          DateTime?
+  
+  // Generated by
+  generatedBy     String?         // User ID
+  
+  // Notes
+  notes           String?         @db.Text
+  termsConditions String?         @db.Text
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([schoolId])
+  @@index([studentFeeId])
+  @@index([studentId])
+  @@index([invoiceNumber])
+  @@index([status])
+  @@index([invoiceDate])
+  @@map("invoices")
+}
+
+// ============================================
+// FINANCE SETTINGS
+// ============================================
+
+model FinanceSettings {
+  id              String          @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String          @unique
+  
+  // Receipt settings
+  receiptPrefix   String          @default("RCP") @db.VarChar(10)
+  receiptStartNumber Int          @default(1)
+  currentReceiptNumber Int        @default(1)
+  
+  // Invoice settings
+  invoicePrefix   String          @default("INV") @db.VarChar(10)
+  invoiceStartNumber Int          @default(1)
+  currentInvoiceNumber Int        @default(1)
+  
+  // Tax settings
+  enableGST       Boolean         @default(false)
+  gstNumber       String?         @db.VarChar(50)
+  gstPercentage   Float?
+  
+  // Late fee settings
+  enableLateFee   Boolean         @default(true)
+  lateFeeType     String?         @db.VarChar(20)  // FIXED, PERCENTAGE
+  lateFeeAmount   Float?
+  lateFeePercentage Float?
+  lateFeeGraceDays Int            @default(0)
+  
+  // Payment gateway settings
+  enableOnlinePayment Boolean     @default(false)
+  paymentGateway  String?         @db.VarChar(50)  // RAZORPAY, PAYTM, STRIPE, etc.
+  gatewayConfig   Json?           // API keys, merchant ID, etc. (encrypted)
+  
+  // Reminder settings
+  enablePaymentReminders Boolean  @default(true)
+  reminderDaysBefore Json?        // [7, 3, 1] days before due date
+  reminderDaysAfter Json?         // [1, 7, 15] days after due date
+  
+  // Approval settings
+  requirePaymentApproval Boolean  @default(false)
+  requireRefundApproval Boolean   @default(true)
+  requireDiscountApproval Boolean @default(true)
+  
+  // Institution details (for invoices/receipts)
+  institutionName String?         @db.VarChar(255)
+  institutionAddress String?      @db.Text
+  institutionPhone String?        @db.VarChar(20)
+  institutionEmail String?        @db.VarChar(255)
+  institutionLogo String?         @db.VarChar(500)
+  
+  // Bank details
+  bankAccounts    Json?           // [{bankName, accountNumber, ifsc, branch}]
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@map("finance_settings")
+}
+
+// ============================================
+// AUDIT & COMPLIANCE
+// ============================================
+
+model FinanceAuditLog {
+  id              String          @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  
+  // Entity reference
+  entityType      String          @db.VarChar(50)  // PAYMENT, REFUND, DISCOUNT, SCHOLARSHIP, etc.
+  entityId        String
+  
+  // Related entities (optional)
+  paymentId       String?
+  payment         Payment?        @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  refundId        String?
+  refund          Refund?         @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  discountId      String?
+  discount        FeeDiscount?    @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  scholarshipId   String?
+  scholarship     FeeScholarship? @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+  
+  // Action details
+  action          String          @db.VarChar(50)  // CREATED, UPDATED, DELETED, APPROVED, REJECTED, etc.
+  description     String          @db.Text
+  
+  // Data snapshot
+  previousData    Json?           // State before change
+  newData         Json?           // State after change
+  
+  // User details
+  userId          String
+  userName        String          @db.VarChar(255)
+  userRole        String          @db.VarChar(50)
+  ipAddress       String?         @db.VarChar(50)
+  
+  // Timestamp
+  createdAt       DateTime        @default(now())
+  
+  @@index([schoolId, createdAt])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([paymentId])
+  @@index([refundId])
+  @@map("finance_audit_logs")
 }
 
 // ============================================

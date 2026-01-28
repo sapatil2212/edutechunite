@@ -8,6 +8,14 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USERNAME,
     pass: process.env.EMAIL_PASSWORD,
   },
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  rateDelta: 1000,
+  rateLimit: 10,
+  connectionTimeout: 5000,
+  greetingTimeout: 3000,
+  socketTimeout: 10000,
 })
 
 interface SendEmailOptions {
@@ -101,6 +109,34 @@ export function getVerificationEmailTemplate(name: string, verificationUrl: stri
       </table>
     </body>
     </html>
+  `
+}
+
+export function getOTPEmailTemplate(name: string, otp: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:20px;font-family:Arial,sans-serif;background:#f5f5f5">
+<div style="max-width:500px;margin:0 auto;background:#fff;border-radius:8px;padding:30px;box-shadow:0 2px 4px rgba(0,0,0,0.1)">
+<h2 style="margin:0 0 20px;color:#047857;text-align:center">EduFlow Email Verification</h2>
+<p style="margin:0 0 15px;color:#333;font-size:15px">Hi <strong>${name}</strong>,</p>
+<p style="margin:0 0 20px;color:#555;font-size:14px">Use this OTP to verify your email and activate your account:</p>
+<div style="text-align:center;margin:25px 0;padding:20px;background:#f0fdf4;border:2px dashed #047857;border-radius:8px">
+<div style="color:#047857;font-size:32px;font-weight:bold;letter-spacing:6px;font-family:monospace">${otp}</div>
+</div>
+<p style="margin:0 0 15px;color:#ef4444;font-size:13px;text-align:center;font-weight:600">⏱️ Expires in 10 minutes</p>
+<p style="margin:0 0 10px;color:#666;font-size:12px">Never share this OTP with anyone.</p>
+<p style="margin:0;color:#999;font-size:11px">If you didn't request this, ignore this email.</p>
+<div style="margin-top:25px;padding-top:20px;border-top:1px solid #eee;text-align:center">
+<p style="margin:0;color:#999;font-size:11px">© ${new Date().getFullYear()} EduFlow ERP</p>
+</div>
+</div>
+</body>
+</html>
   `
 }
 

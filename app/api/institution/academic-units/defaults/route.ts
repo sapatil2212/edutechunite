@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
         // Check if already exists
         const existing = await tx.academicUnit.findFirst({
           where: {
-            schoolId: user.schoolId,
+            schoolId: user.schoolId!,
             academicYearId,
             parentId: null,
             name: unit.name,
@@ -303,7 +303,7 @@ export async function POST(request: NextRequest) {
 
         const createdUnit = await tx.academicUnit.create({
           data: {
-            schoolId: user.schoolId,
+            schoolId: user.schoolId!,
             academicYearId,
             name: unit.name,
             type: defaults.type as 'CLASS' | 'SEMESTER' | 'BATCH' | 'YEAR' | 'TERM',
@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
           for (let i = 0; i < unit.suggestedSections.length; i++) {
             await tx.academicUnit.create({
               data: {
-                schoolId: user.schoolId,
+                schoolId: user.schoolId!,
                 academicYearId,
                 parentId: createdUnit.id,
                 name: `Section ${unit.suggestedSections[i]}`,

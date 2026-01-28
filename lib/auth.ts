@@ -155,3 +155,25 @@ export const authOptions: NextAuthOptions = {
   debug: false,
 }
 
+// JWT verification utility for API routes
+import { jwtVerify } from 'jose';
+
+export async function verifyToken(token: string) {
+  try {
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+    const { payload } = await jwtVerify(token, secret);
+    
+    return {
+      userId: payload.id as string,
+      email: payload.email as string,
+      fullName: payload.name as string,
+      role: payload.role as string,
+      schoolId: payload.schoolId as string | null,
+      studentId: payload.studentId as string | null,
+      guardianId: payload.guardianId as string | null,
+      teacherId: payload.teacherId as string | null,
+    };
+  } catch (error) {
+    return null;
+  }
+}

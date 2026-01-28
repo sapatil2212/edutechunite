@@ -172,6 +172,8 @@ export async function POST(req: NextRequest) {
       previousSchool,
       previousClass,
       guardians, // Array of guardian data
+      feeData, // Fee structure assignment data
+      paymentData, // Payment collection data (optional)
     } = body
 
     // Validate required fields
@@ -268,7 +270,7 @@ export async function POST(req: NextRequest) {
     const studentPassword = generateRandomPassword(10)
     const hashedStudentPassword = await hashPassword(studentPassword)
 
-    // Create student with transaction
+    // Create student with transaction (increased timeout for complex operations)
     const result = await prisma.$transaction(async (tx) => {
       // Create user account for student
       const user = await tx.user.create({
@@ -431,7 +433,203 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return { student: newStudent, password: studentPassword }
+      // Handle fee structure assignment if provided
+      let studentFeeId: string | null = null
+      let receiptNumber: string | null = null
+
+      if (feeData && feeData.feeStructureId) {
+        // Calculate amounts
+        const totalAmount = feeData.totalAmount || 0
+        const discountAmount = feeData.discountAmount || 0
+        const finalAmount = feeData.finalAmount || totalAmount - discountAmount
+
+        // Create student fee record
+        const studentFee = await tx.studentFee.create({
+          data: {
+            schoolId: session.user.schoolId!,
+            studentId: newStudent.id,
+            feeStructureId: feeData.feeStructureId,
+            academicYearId,
+            totalAmount,
+            discountAmount,
+            scholarshipAmount: 0,
+            taxAmount: 0,
+            finalAmount,
+            paidAmount: 0,
+            balanceAmount: finalAmount,
+            status: 'PENDING',
+            assignedBy: session.user.id,
+            assignedAt: new Date(),
+            isOverridden: feeData.components ? true : false,
+            overrideReason: feeData.components ? 'Custom amounts applied during onboarding' : undefined,
+          },
+        })
+
+        studentFeeId = studentFee.id
+
+        // Apply discounts if provided
+        if (feeData.discounts && Array.isArray(feeData.discounts)) {
+          for (const discount of feeData.discounts) {
+            const discountValue = discount.value
+            let calculatedAmount = 0
+            
+            if (discount.type === 'PERCENTAGE') {
+              calculatedAmount = (totalAmount * discountValue) / 100
+            } else {
+              calculatedAmount = discountValue
+            }
+
+            // Map discount type to Prisma enum (PERCENTAGE or FIXED_AMOUNT)
+            const discountType = discount.type === 'PERCENTAGE' ? 'PERCENTAGE' : 'FIXED_AMOUNT'
+
+            await tx.feeDiscount.create({
+              data: {
+                schoolId: session.user.schoolId!,
+                studentFeeId: studentFee.id,
+                studentId: newStudent.id,
+                name: discount.reason,
+                discountType: discountType,
+                discountValue: discountValue,
+                discountAmount: calculatedAmount,
+                reason: discount.reason,
+                approvedBy: session.user.id,
+                approvedAt: new Date(),
+              },
+            })
+          }
+        }
+
+        // Handle payment collection if provided
+        if (paymentData && paymentData.amountCollected > 0) {
+          // Get finance settings for receipt number generation
+          let financeSettings = await tx.financeSettings.findUnique({
+            where: { schoolId: session.user.schoolId! },
+          })
+
+          if (!financeSettings) {
+            // Create default finance settings if not exists
+            financeSettings = await tx.financeSettings.create({
+              data: {
+                schoolId: session.user.schoolId!,
+                receiptPrefix: 'RCP',
+                receiptStartNumber: 1,
+                currentReceiptNumber: 1,
+                invoicePrefix: 'INV',
+                invoiceStartNumber: 1,
+                currentInvoiceNumber: 1,
+              },
+            })
+          }
+
+          // Generate receipt number
+          const receiptNum = financeSettings.currentReceiptNumber
+          receiptNumber = `${financeSettings.receiptPrefix}${String(receiptNum).padStart(6, '0')}`
+
+          // Update receipt counter
+          await tx.financeSettings.update({
+            where: { schoolId: session.user.schoolId! },
+            data: { currentReceiptNumber: { increment: 1 } },
+          })
+
+          // Create payment record
+          await tx.payment.create({
+            data: {
+              schoolId: session.user.schoolId!,
+              studentFeeId: studentFee.id,
+              studentId: newStudent.id,
+              amount: paymentData.amountCollected,
+              paymentMethod: paymentData.paymentMode,
+              transactionId: paymentData.transactionId,
+              referenceNumber: paymentData.referenceNumber,
+              bankName: paymentData.bankName,
+              branchName: paymentData.branchName,
+              receiptNumber,
+              paidAt: new Date(),
+              recordedBy: session.user.id,
+              remarks: paymentData.remarks,
+              status: 'SUCCESS',
+            },
+          })
+
+          // Update student fee with payment
+          const paidAmount = paymentData.amountCollected
+          const balanceAmount = Math.max(0, finalAmount - paidAmount)
+          const status = balanceAmount === 0 ? 'PAID' : paidAmount > 0 ? 'PARTIAL' : 'PENDING'
+
+          await tx.studentFee.update({
+            where: { id: studentFee.id },
+            data: {
+              paidAmount,
+              balanceAmount,
+              status,
+            },
+          })
+
+          // Create audit log for payment
+          await tx.financeAuditLog.create({
+            data: {
+              schoolId: session.user.schoolId!,
+              entityType: 'PAYMENT',
+              entityId: studentFee.id,
+              action: 'CREATED',
+              description: `Payment of ${formatCurrency(paidAmount)} collected during student onboarding via ${paymentData.paymentMode}`,
+              userId: session.user.id,
+              userName: session.user.name || session.user.email || 'Admin',
+              userRole: session.user.role,
+              newData: {
+                amount: paidAmount,
+                paymentMethod: paymentData.paymentMode,
+                receiptNumber,
+                collectedBy: paymentData.collectedBy,
+              },
+              ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+            },
+          })
+          
+          function formatCurrency(amount: number) {
+            return new Intl.NumberFormat('en-IN', {
+              style: 'currency',
+              currency: 'INR',
+              maximumFractionDigits: 0
+            }).format(amount)
+          }
+        }
+
+        // Create audit log for fee assignment
+        await tx.financeAuditLog.create({
+          data: {
+            schoolId: session.user.schoolId!,
+            entityType: 'STUDENT_FEE',
+            entityId: studentFee.id,
+            action: 'CREATED',
+            description: `Fee structure assigned to student ${fullName} (${admissionNumber}) during onboarding. Total: ${formatCurrency(totalAmount)}, Discount: ${formatCurrency(discountAmount)}, Final: ${formatCurrency(finalAmount)}`,
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || 'Admin',
+            userRole: session.user.role,
+            newData: {
+              studentId: newStudent.id,
+              feeStructureId: feeData.feeStructureId,
+              totalAmount,
+              discountAmount,
+              finalAmount,
+            },
+            ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+          },
+        })
+        
+        function formatCurrency(amount: number) {
+          return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            maximumFractionDigits: 0
+          }).format(amount)
+        }
+      }
+
+      return { student: newStudent, password: studentPassword, receiptNumber }
+    }, {
+      maxWait: 35000, // Maximum time to wait for a transaction slot
+      timeout: 30000, // Maximum time for the transaction to complete (30 seconds)
     })
 
     // Get school details for email
@@ -511,7 +709,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ student: result.student }, { status: 201 })
+    return NextResponse.json({ 
+      student: result.student,
+      receiptNumber: result.receiptNumber,
+      message: result.receiptNumber 
+        ? `Student created successfully. Receipt ${result.receiptNumber} generated.`
+        : 'Student created successfully.'
+    }, { status: 201 })
   } catch (error) {
     console.error('Error creating student:', error)
     return NextResponse.json(

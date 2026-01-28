@@ -88,7 +88,17 @@ export const DashboardSidebar: React.FC = () => {
     { icon: Calendar, label: 'Schedule', href: '/dashboard/schedule', badge: null },
     { icon: FileText, label: 'Assignments', href: '/dashboard/assignments', badge: null },
     { icon: BarChart3, label: 'Analytics', href: '/dashboard/analytics', badge: null },
-    { icon: DollarSign, label: 'Finance', href: '/dashboard/finance', badge: null },
+    { 
+      icon: DollarSign, 
+      label: 'Finance', 
+      href: '/dashboard/finance',
+      children: [
+        { icon: FileText, label: 'Overview', href: '/dashboard/finance' },
+        { icon: Layers, label: 'Fee Structures', href: '/dashboard/finance/fee-structures' },
+        { icon: CreditCard, label: 'Payments', href: '/dashboard/finance/payments' },
+        { icon: Users, label: 'Student Fees', href: '/dashboard/finance/student-fees' },
+      ]
+    },
     { icon: Bell, label: 'Notifications', href: '/dashboard/notifications', badge: null },
     { icon: Settings, label: 'Settings', href: '/dashboard/settings', badge: null },
     { icon: Clock, label: 'My Timetable', href: '/dashboard/timetable', badge: null },

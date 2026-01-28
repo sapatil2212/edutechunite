@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Dropdown } from '@/components/ui/dropdown'
 import { InstitutionTypeSelector, InstitutionType } from './InstitutionTypeSelector'
 import { SchoolTypeSelect, SchoolType } from './SchoolTypeSelect'
+import { OTPModal } from './OTPModal'
 
 // Indian states with Maharashtra districts structure
 const indianStates = [
@@ -163,6 +164,8 @@ export const OnboardingForm: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [apiError, setApiError] = useState('')
   const [successData, setSuccessData] = useState<{ schoolId: string; institutionName: string } | null>(null)
+  const [showOTPModal, setShowOTPModal] = useState(false)
+  const [registeredEmail, setRegisteredEmail] = useState('')
 
   const totalSteps = 2
   const passwordStrength = getPasswordStrength(formData.password)
@@ -267,7 +270,15 @@ export const OnboardingForm: React.FC = () => {
   }
 
   const handleSubmit = async () => {
-    if (!validateStep2()) return
+    // Validate and show errors if validation fails
+    if (!validateStep2()) {
+      // Scroll to first error
+      const firstErrorElement = document.querySelector('.border-red-500')
+      if (firstErrorElement) {
+        firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      return
+    }
 
     setIsSubmitting(true)
     setApiError('')
@@ -302,11 +313,9 @@ export const OnboardingForm: React.FC = () => {
         return
       }
 
-      // Success - show success state
-      setSuccessData({
-        schoolId: data.data.schoolId,
-        institutionName: data.data.institutionName,
-      })
+      // Success - show OTP modal
+      setRegisteredEmail(formData.email)
+      setShowOTPModal(true)
 
     } catch (error) {
       console.error('Registration error:', error)
@@ -379,7 +388,7 @@ export const OnboardingForm: React.FC = () => {
           transition={{ delay: 0.3 }}
           className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1"
         >
-          Registration Successful! 🎉
+          Email Verified Successfully! 🎉
         </motion.h2>
 
         <motion.p
@@ -388,7 +397,7 @@ export const OnboardingForm: React.FC = () => {
           transition={{ delay: 0.4 }}
           className="text-sm text-gray-600 dark:text-gray-400 mb-4"
         >
-          Welcome aboard! We've sent a verification email to your inbox.
+          Welcome aboard! Your account has been activated.
         </motion.p>
 
         <motion.div
@@ -413,7 +422,7 @@ export const OnboardingForm: React.FC = () => {
           className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-5"
         >
           <p className="text-xs text-blue-700 dark:text-blue-300">
-            📧 Please check your email and click the verification link to activate your account.
+            ✅ You can now log in to your account and start using EduFlow.
           </p>
         </motion.div>
 
@@ -834,7 +843,7 @@ export const OnboardingForm: React.FC = () => {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={!isStep2Valid || isSubmitting}
+                disabled={isSubmitting}
                 className="flex-1"
                 size="sm"
                 icon={isSubmitting ? Loader2 : CheckCircle2}
@@ -846,6 +855,17 @@ export const OnboardingForm: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* OTP Modal */}
+      <OTPModal
+        isOpen={showOTPModal}
+        onClose={() => setShowOTPModal(false)}
+        email={registeredEmail}
+        onSuccess={(data) => {
+          setShowOTPModal(false)
+          setSuccessData(data)
+        }}
+      />
     </div>
   )
 }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { hashPassword, validatePassword } from '@/lib/utils/password'
-import { generateSchoolId, generateVerificationToken } from '@/lib/utils/generate-id'
-import { sendEmail, getVerificationEmailTemplate } from '@/lib/email'
+import { generateSchoolId, generateOTP } from '@/lib/utils/generate-id'
+import { sendEmail, getOTPEmailTemplate } from '@/lib/email'
 import { InstitutionType, SchoolType } from '@prisma/client'
 
 interface RegisterRequestBody {
@@ -128,9 +128,9 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(body.password)
     
-    // Generate verification token
-    const verificationToken = generateVerificationToken()
-    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    // Generate OTP
+    const otp = generateOTP()
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
     
     // Create school and admin user in a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -162,31 +162,33 @@ export async function POST(request: NextRequest) {
           role: 'SCHOOL_ADMIN',
           status: 'PENDING',
           schoolId: school.id,
-          verificationToken,
-          verificationExpiry,
+          verificationToken: otp,
+          verificationExpiry: otpExpiry,
         },
       })
       
       return { school, user }
     })
     
-    // Send verification email
-    const verificationUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify?token=${verificationToken}`
-    const emailHtml = getVerificationEmailTemplate(body.fullName, verificationUrl)
+    // Send OTP email asynchronously (non-blocking)
+    const emailHtml = getOTPEmailTemplate(body.fullName, otp)
     
-    await sendEmail({
+    sendEmail({
       to: body.email,
       subject: 'Verify Your Email - EduFlow ERP',
       html: emailHtml,
+    }).catch(error => {
+      console.error('Failed to send OTP email:', error)
     })
     
     return NextResponse.json({
       success: true,
-      message: 'Registration successful! Please check your email to verify your account.',
+      message: 'Registration successful! Please check your email for the OTP.',
       data: {
         schoolId: result.school.schoolId,
         institutionName: result.school.name,
         email: result.user.email,
+        userId: result.user.id,
       },
     }, { status: 201 })
     

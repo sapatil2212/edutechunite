@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
       // Create the main academic unit
       const unit = await tx.academicUnit.create({
         data: {
-          schoolId: user.schoolId,
+          schoolId: user.schoolId!,
           academicYearId,
           courseId: courseId || undefined,
           name: name.trim(),
@@ -257,7 +257,7 @@ export async function POST(request: NextRequest) {
           const section = sections[i]
           const sectionUnit = await tx.academicUnit.create({
             data: {
-              schoolId: user.schoolId,
+              schoolId: user.schoolId!,
               academicYearId,
               courseId: courseId || undefined,
               parentId: unit.id,

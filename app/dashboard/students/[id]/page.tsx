@@ -17,6 +17,11 @@ import {
   Pencil,
   Trash2,
   Clock,
+  DollarSign,
+  Eye,
+  Download,
+  Printer,
+  Edit,
 } from 'lucide-react'
 import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
@@ -48,6 +53,28 @@ interface EnrollmentHistory {
   status: string
   enrollmentDate: string
   exitDate: string | null
+}
+
+interface Payment {
+  id: string
+  receiptNumber: string
+  amount: number
+  paymentMethod: string
+  transactionId: string | null
+  paidAt: string
+  status: string
+  remarks: string | null
+}
+
+interface StudentFee {
+  id: string
+  totalAmount: number
+  discountAmount: number
+  finalAmount: number
+  paidAmount: number
+  balanceAmount: number
+  status: string
+  payments: Payment[]
 }
 
 interface Student {
@@ -92,12 +119,14 @@ export default function ViewStudentPage() {
   const studentId = params.id as string
 
   const [student, setStudent] = useState<Student | null>(null)
+  const [studentFee, setStudentFee] = useState<StudentFee | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   useEffect(() => {
     fetchStudent()
+    fetchStudentFee()
   }, [studentId])
 
   const fetchStudent = async () => {
@@ -116,6 +145,19 @@ export default function ViewStudentPage() {
       setError('Failed to fetch student')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchStudentFee = async () => {
+    try {
+      const res = await fetch(`/api/institution/finance/student-fees?studentId=${studentId}`)
+      const data = await res.json()
+
+      if (res.ok && data.studentFees && data.studentFees.length > 0) {
+        setStudentFee(data.studentFees[0])
+      }
+    } catch (err) {
+      console.error('Error fetching student fee:', err)
     }
   }
 
@@ -178,6 +220,14 @@ export default function ViewStudentPage() {
       month: 'short',
       year: 'numeric',
     })
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(amount)
   }
 
   const getGenderLabel = (gender: string) => {
@@ -478,6 +528,141 @@ export default function ViewStudentPage() {
                         </div>
                       ))}
                     </div>
+                  </motion.div>
+                )}
+
+                {/* Fee Payment History */}
+                {studentFee && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-700 p-6"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
+                          <DollarSign className="w-5 h-5 text-green-500" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Fee Payment History
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Total: {formatCurrency(studentFee.finalAmount)} • Paid: {formatCurrency(studentFee.paidAmount)}
+                          </p>
+                        </div>
+                      </div>
+                      <Link href={`/dashboard/students/${studentId}/fees`}>
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Details
+                        </Button>
+                      </Link>
+                    </div>
+
+                    {/* Fee Summary */}
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">Total Fee</p>
+                        <p className="text-lg font-bold text-blue-900 dark:text-blue-300">
+                          {formatCurrency(studentFee.totalAmount)}
+                        </p>
+                      </div>
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
+                        <p className="text-xs text-green-600 dark:text-green-400 mb-1">Paid</p>
+                        <p className="text-lg font-bold text-green-900 dark:text-green-300">
+                          {formatCurrency(studentFee.paidAmount)}
+                        </p>
+                      </div>
+                      <div className={`rounded-lg p-3 ${
+                        studentFee.balanceAmount > 0 
+                          ? 'bg-orange-50 dark:bg-orange-900/20' 
+                          : 'bg-gray-50 dark:bg-gray-700'
+                      }`}>
+                        <p className={`text-xs mb-1 ${
+                          studentFee.balanceAmount > 0 
+                            ? 'text-orange-600 dark:text-orange-400' 
+                            : 'text-gray-600 dark:text-gray-400'
+                        }`}>Balance</p>
+                        <p className={`text-lg font-bold ${
+                          studentFee.balanceAmount > 0 
+                            ? 'text-orange-900 dark:text-orange-300' 
+                            : 'text-gray-900 dark:text-gray-300'
+                        }`}>
+                          {formatCurrency(studentFee.balanceAmount)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Payment List */}
+                    {studentFee.payments && studentFee.payments.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">
+                          Recent Payments
+                        </p>
+                        {studentFee.payments.slice(0, 3).map((payment) => (
+                          <div
+                            key={payment.id}
+                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-dark-700 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-600 transition-colors"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                  {formatCurrency(payment.amount)}
+                                </p>
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 text-xs font-medium rounded">
+                                  {payment.paymentMethod}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+                                <span>{formatDate(payment.paidAt)}</span>
+                                <span>Receipt: {payment.receiptNumber}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => router.push(`/dashboard/finance/receipts/${payment.receiptNumber}`)}
+                                className="p-2 hover:bg-gray-200 dark:hover:bg-dark-500 rounded-lg transition-colors"
+                                title="View Receipt"
+                              >
+                                <Eye className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              </button>
+                              <button
+                                onClick={() => window.print()}
+                                className="p-2 hover:bg-gray-200 dark:hover:bg-dark-500 rounded-lg transition-colors"
+                                title="Print Receipt"
+                              >
+                                <Printer className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = `/dashboard/finance/receipts/${payment.receiptNumber}`;
+                                  link.target = '_blank';
+                                  link.click();
+                                }}
+                                className="p-2 hover:bg-gray-200 dark:hover:bg-dark-500 rounded-lg transition-colors"
+                                title="Download Receipt"
+                              >
+                                <Download className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {studentFee.payments.length > 3 && (
+                          <Link href={`/dashboard/students/${studentId}/fees`}>
+                            <p className="text-xs text-primary hover:underline text-center pt-2">
+                              View all {studentFee.payments.length} payments →
+                            </p>
+                          </Link>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        No payments recorded yet
+                      </p>
+                    )}
                   </motion.div>
                 )}
               </div>

@@ -16,109 +16,119 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const limit = parseInt(searchParams.get('limit') || '10')
 
-    // Fetch recent activities from various sources
+    // Fetch recent activities from various sources with error handling
+    const fetchStudents = async () => {
+      try {
+        return await prisma.student.findMany({
+          where: { schoolId, status: 'ACTIVE' },
+          select: {
+            id: true,
+            fullName: true,
+            createdAt: true,
+            course: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        })
+      } catch (error) {
+        console.log('Student model not available')
+        return []
+      }
+    }
+
+    const fetchAssignments = async () => {
+      try {
+        if (!prisma.assignmentSubmission) return []
+        return await prisma.assignmentSubmission.findMany({
+          where: {
+            assignment: { schoolId },
+            status: 'SUBMITTED',
+          },
+          select: {
+            id: true,
+            submittedAt: true,
+            student: { select: { fullName: true } },
+            assignment: { select: { title: true } },
+          },
+          orderBy: { submittedAt: 'desc' },
+          take: 5,
+        })
+      } catch (error) {
+        console.log('AssignmentSubmission model not available')
+        return []
+      }
+    }
+
+    const fetchPayments = async () => {
+      try {
+        return await prisma.payment.findMany({
+          where: {
+            studentFee: { schoolId },
+          },
+          select: {
+            id: true,
+            amount: true,
+            paidAt: true,
+            studentFee: {
+              select: {
+                student: { select: { fullName: true } },
+              },
+            },
+          },
+          orderBy: { paidAt: 'desc' },
+          take: 5,
+        })
+      } catch (error) {
+        console.log('Payment model not available')
+        return []
+      }
+    }
+
+    const fetchHomework = async () => {
+      try {
+        if (!prisma.homeworkSubmission) return []
+        return await prisma.homeworkSubmission.findMany({
+          where: {
+            homework: { schoolId },
+            status: 'EVALUATED',
+          },
+          select: {
+            id: true,
+            submittedAt: true,
+            student: { select: { fullName: true } },
+            homework: {
+              select: { 
+                title: true,
+                subject: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { submittedAt: 'desc' },
+          take: 5,
+        })
+      } catch (error) {
+        console.log('HomeworkSubmission model not available')
+        return []
+      }
+    }
+
     const [
       recentStudents,
       recentAssignments,
       recentPayments,
       recentEnrollments,
     ] = await Promise.all([
-      // Recent student enrollments
-      prisma.student.findMany({
-        where: {
-          schoolId,
-          status: 'ACTIVE',
-        },
-        select: {
-          id: true,
-          fullName: true,
-          createdAt: true,
-          course: {
-            select: { name: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-      }),
-
-      // Recent assignment submissions
-      prisma.assignmentSubmission.findMany({
-        where: {
-          assignment: {
-            schoolId,
-          },
-          status: 'SUBMITTED',
-        },
-        select: {
-          id: true,
-          submittedAt: true,
-          student: {
-            select: { fullName: true },
-          },
-          assignment: {
-            select: { title: true },
-          },
-        },
-        orderBy: { submittedAt: 'desc' },
-        take: 5,
-      }),
-
-      // Recent payments
-      prisma.feePayment.findMany({
-        where: {
-          studentFee: {
-            schoolId,
-          },
-        },
-        select: {
-          id: true,
-          amount: true,
-          paidAt: true,
-          studentFee: {
-            select: {
-              student: {
-                select: { fullName: true },
-              },
-            },
-          },
-        },
-        orderBy: { paidAt: 'desc' },
-        take: 5,
-      }),
-
-      // Recent course completions (homework completed)
-      prisma.homeworkSubmission.findMany({
-        where: {
-          homework: {
-            schoolId,
-          },
-          status: 'EVALUATED',
-        },
-        select: {
-          id: true,
-          submittedAt: true,
-          student: {
-            select: { fullName: true },
-          },
-          homework: {
-            select: { 
-              title: true,
-              subject: {
-                select: { name: true },
-              },
-            },
-          },
-        },
-        orderBy: { submittedAt: 'desc' },
-        take: 5,
-      }),
+      fetchStudents(),
+      fetchAssignments(),
+      fetchPayments(),
+      fetchHomework(),
     ])
 
     // Combine and format activities
     const activities: any[] = []
 
     // Add student enrollments
-    recentStudents.forEach((student) => {
+    recentStudents.forEach((student: any) => {
       activities.push({
         id: `enrollment-${student.id}`,
         title: 'New student enrollment',
@@ -129,7 +139,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Add assignment submissions
-    recentAssignments.forEach((submission) => {
+    recentAssignments.forEach((submission: any) => {
       if (submission.student) {
         activities.push({
           id: `assignment-${submission.id}`,
@@ -142,7 +152,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Add payments
-    recentPayments.forEach((payment) => {
+    recentPayments.forEach((payment: any) => {
       activities.push({
         id: `payment-${payment.id}`,
         title: 'Payment received',
@@ -153,7 +163,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Add homework completions
-    recentEnrollments.forEach((submission) => {
+    recentEnrollments.forEach((submission: any) => {
       if (submission.submittedAt) {
         activities.push({
           id: `completion-${submission.id}`,

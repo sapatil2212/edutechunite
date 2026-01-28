@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Play, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { motion } from 'framer-motion'
+import { DashboardPreview } from './dashboard-preview'
 
 export const Hero: React.FC = () => {
   const features = [
@@ -70,25 +71,7 @@ export const Hero: React.FC = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="relative"
           >
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl">
-              <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 to-blue-100 dark:from-primary/10 dark:to-dark-800 flex items-center justify-center">
-                <div className="w-full h-full bg-white dark:bg-dark-800 rounded-2xl m-4 p-8 shadow-soft-lg">
-                  <div className="space-y-4">
-                    <div className="h-8 bg-gray-200 dark:bg-dark-700 rounded-lg w-3/4 animate-pulse" />
-                    <div className="h-4 bg-gray-200 dark:bg-dark-700 rounded w-full animate-pulse animation-delay-200" />
-                    <div className="h-4 bg-gray-200 dark:bg-dark-700 rounded w-5/6 animate-pulse animation-delay-400" />
-                    <div className="grid grid-cols-3 gap-4 mt-8">
-                      <div className="h-24 bg-primary/20 rounded-xl animate-pulse" />
-                      <div className="h-24 bg-blue-100 dark:bg-blue-900/20 rounded-xl animate-pulse animation-delay-200" />
-                      <div className="h-24 bg-purple-100 dark:bg-purple-900/20 rounded-xl animate-pulse animation-delay-400" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute -top-6 -right-6 w-24 h-24 bg-primary rounded-2xl rotate-12 opacity-20" />
-            <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-blue-500 rounded-2xl -rotate-12 opacity-20" />
+            <DashboardPreview />
           </motion.div>
         </div>
       </div>
