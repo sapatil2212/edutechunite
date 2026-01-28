@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -26,7 +26,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react'
 
 interface StudentProfile {
@@ -73,7 +74,7 @@ interface StudentProfile {
   }>
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'info')
@@ -450,6 +451,18 @@ export default function ProfilePage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
   )
 }
 

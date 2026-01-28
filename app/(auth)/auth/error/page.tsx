@@ -1,10 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { GraduationCap, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { GraduationCap, AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const errorMessages: Record<string, { title: string; message: string }> = {
@@ -30,7 +30,7 @@ const errorMessages: Record<string, { title: string; message: string }> = {
   },
 }
 
-export default function AuthErrorPage() {
+function AuthErrorContent() {
   const searchParams = useSearchParams()
   const errorCode = searchParams.get('error') || 'default'
   const errorInfo = errorMessages[errorCode] || errorMessages.default
@@ -77,6 +77,18 @@ export default function AuthErrorPage() {
         </div>
       </div>
     </motion.div>
+  )
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={
+      <div className="w-full max-w-md bg-white dark:bg-dark-800 rounded-3xl shadow-soft-lg p-8 border border-gray-100 dark:border-dark-700 flex justify-center items-center h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    }>
+      <AuthErrorContent />
+    </Suspense>
   )
 }
 

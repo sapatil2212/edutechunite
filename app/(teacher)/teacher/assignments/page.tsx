@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
@@ -67,7 +67,7 @@ interface AssignedClass {
   sections?: Array<{ id: string; name: string; studentCount: number }>
 }
 
-export default function TeacherAssignmentsPage() {
+function TeacherAssignmentsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const action = searchParams.get('action')
@@ -809,5 +809,18 @@ function AssignmentItem({ assignment }: { assignment: Assignment }) {
         </Button>
       </div>
     </motion.div>
+  )
+}
+
+export default function TeacherAssignmentsPage() {
+  return (
+    <Suspense fallback={
+       <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="w-12 h-12 animate-spin text-primary-700 mb-4" />
+          <p className="text-gray-500 dark:text-gray-400 font-bold text-center uppercase tracking-widest text-xs">Loading...</p>
+        </div>
+    }>
+      <TeacherAssignmentsContent />
+    </Suspense>
   )
 }
