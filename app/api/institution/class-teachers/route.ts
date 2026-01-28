@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma'
 import { validateClassTeacherAssignment } from '@/lib/teacher-assignment/validation'
 import { logCreation, ASSIGNMENT_CATEGORY } from '@/lib/teacher-assignment/history'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/institution/class-teachers
  * List all class teacher assignments with filters

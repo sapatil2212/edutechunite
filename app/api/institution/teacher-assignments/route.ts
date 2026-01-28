@@ -6,6 +6,8 @@ import { validateSubjectTeacherAssignment } from '@/lib/teacher-assignment/valid
 import { logCreation, ASSIGNMENT_CATEGORY } from '@/lib/teacher-assignment/history'
 import { updateTeacherCurrentPeriods } from '@/lib/teacher-assignment/workload'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/institution/teacher-assignments
  * List all subject teacher assignments with filters

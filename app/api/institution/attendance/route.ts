@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { getJWTUser } from '@/lib/jwt'
 import prisma from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 // GET: Get attendance records
 export async function GET(req: NextRequest) {
   try {

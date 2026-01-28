@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma'
 import { hashPassword, validatePassword } from '@/lib/utils/password'
 import { sendEmail, getTeacherWelcomeEmailTemplate, getTeacherRegistrationNotificationTemplate } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 // GET - List all teachers
 export async function GET(request: NextRequest) {
   try {
