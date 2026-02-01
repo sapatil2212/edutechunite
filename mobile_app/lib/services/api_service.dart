@@ -17,10 +17,17 @@ class ApiService {
   // Generic GET method
   Future<Map<String, dynamic>> get(String endpoint) async {
     try {
+      final url = '$_baseUrl$endpoint';
+      print('GET Request to: $url');
       final response = await http.get(
-        Uri.parse('$_baseUrl$endpoint'),
+        Uri.parse(url),
         headers: _headers,
       );
+
+      print('Response Status: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        print('Response Body: ${response.body}');
+      }
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -28,6 +35,7 @@ class ApiService {
         throw Exception('Failed to load data: ${response.statusCode}');
       }
     } catch (e) {
+      print('Network Error in GET $endpoint: $e');
       throw Exception('Network error: $e');
     }
   }
@@ -145,6 +153,31 @@ class ApiService {
     return await get('/api/institution/resources');
   }
 
+  // Teacher APIs
+  Future<Map<String, dynamic>> getTeacherClasses() async {
+    // This endpoint should return classes assigned to the teacher
+    return await get('/api/institution/teachers/my-classes');
+  }
+
+  Future<Map<String, dynamic>> getStudentsForClass(String classId) async {
+    return await get('/api/institution/teachers/my-classes/$classId/students');
+  }
+
+  Future<Map<String, dynamic>> submitAttendance(String classId, String date, List<Map<String, dynamic>> attendance) async {
+    return await post('/api/institution/teachers/my-classes/$classId/attendance', {
+      'date': date,
+      'attendance': attendance,
+    });
+  }
+
+  Future<Map<String, dynamic>> getAttendanceReport(String classId, String range) async {
+    return await get('/api/institution/teachers/attendance/report?classId=$classId&range=$range');
+  }
+
+  Future<Map<String, dynamic>> getTeacherDashboardStats() async {
+    return await get('/api/institution/dashboard/teacher-stats');
+  }
+
   // Subjects APIs
   Future<Map<String, dynamic>> getSubjects({String? academicUnitId}) async {
     String endpoint = '/api/institution/subjects?';
@@ -159,5 +192,14 @@ class ApiService {
 
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
     return await put('/api/institution/profile', data);
+  }
+
+  // Teacher Profile APIs
+  Future<Map<String, dynamic>> getTeacherProfile() async {
+    return await get('/api/institution/teachers/me');
+  }
+
+  Future<Map<String, dynamic>> updateTeacherProfile(Map<String, dynamic> data) async {
+    return await put('/api/institution/teachers/me', data);
   }
 }

@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
         school: true,
         studentProfile: true,
         guardianProfile: true,
+        teacherProfile: true,
       },
     })
 
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
       schoolId: user.schoolId,
       studentId: user.studentProfile?.id,
       guardianId: user.guardianProfile?.id,
+      teacherId: user.teacherProfile?.id,
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
         schoolId: user.schoolId,
         studentId: user.studentProfile?.id,
         guardianId: user.guardianProfile?.id,
+        teacherId: user.teacherProfile?.id,
       }
     })
 

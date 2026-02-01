@@ -1,7 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions, verifyToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+
+/**
+ * Helper to get session from cookie or Bearer token
+ */
+async function getSessionOrToken(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (session) return session
+
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1]
+    const payload = await verifyToken(token)
+    
+    if (payload) {
+      return {
+        user: {
+          id: payload.userId,
+          email: payload.email,
+          name: payload.fullName,
+          role: payload.role,
+          schoolId: payload.schoolId,
+          teacherId: payload.teacherId,
+        }
+      }
+    }
+  }
+  return null
+}
+
+export const dynamic = 'force-dynamic'
 
 interface AttendanceRecord {
   id: string
@@ -26,7 +56,7 @@ interface AssignmentRecord {
 // Fetches attendance report data for the logged-in teacher's classes
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSessionOrToken(request)
     
     if (!session?.user?.email) {
       return NextResponse.json(

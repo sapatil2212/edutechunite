@@ -645,6 +645,25 @@ export default function TeacherAssignmentsPage() {
             )}
 
             <form onSubmit={handleClassTeacherSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Academic Year <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="" disabled>Select academic year</option>
+                  {academicYears.map((year) => (
+                    <option key={year.id} value={year.id}>
+                      {year.name} {year.isCurrent && '(Current)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <SearchableDropdown
                 label="Class / Section"
                 required
@@ -757,6 +776,25 @@ export default function TeacherAssignmentsPage() {
             )}
 
             <form onSubmit={handleSubjectTeacherSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Academic Year <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="" disabled>Select academic year</option>
+                  {academicYears.map((year) => (
+                    <option key={year.id} value={year.id}>
+                      {year.name} {year.isCurrent && '(Current)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <SearchableDropdown
                 label="Class / Section"
                 required

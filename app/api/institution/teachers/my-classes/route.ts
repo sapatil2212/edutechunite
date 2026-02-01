@@ -1,17 +1,51 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions, verifyToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+
+/**
+ * Helper to get session from cookie or Bearer token
+ */
+async function getSessionOrToken(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (session) return session
+
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1]
+    const payload = await verifyToken(token)
+    
+    if (payload) {
+      return {
+        user: {
+          id: payload.userId,
+          email: payload.email,
+          name: payload.fullName,
+          role: payload.role,
+          schoolId: payload.schoolId,
+          teacherId: payload.teacherId,
+        }
+      }
+    }
+  }
+  return null
+}
 
 /**
  * GET /api/institution/teachers/my-classes
  * Get classes assigned to the current teacher (as class teacher or subject teacher)
  */
-export async function GET() {
+export const dynamic = 'force-dynamic'
+
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSessionOrToken(req)
     
+    console.log('GET /my-classes - Session Email:', session?.user?.email)
+    console.log('GET /my-classes - Teacher ID:', session?.user?.teacherId)
+
     if (!session?.user?.schoolId) {
+      console.log('Unauthorized: No schoolId')
       return NextResponse.json(
         { success: false, message: 'Unauthorized' },
         { status: 401 }
@@ -29,14 +63,51 @@ export async function GET() {
     const teacherId = session.user.teacherId
 
     // Get current academic year
-    const currentYear = await prisma.academicYear.findFirst({
+    let currentYear = await prisma.academicYear.findFirst({
       where: {
         schoolId: session.user.schoolId,
         isCurrent: true,
       },
     })
+    
+    console.log('Current Year (isCurrent):', currentYear?.name)
+
+    // Fallback: If no "isCurrent" year, find one that covers today
+    if (!currentYear) {
+      const now = new Date()
+      currentYear = await prisma.academicYear.findFirst({
+        where: {
+          schoolId: session.user.schoolId,
+          isActive: true,
+          startDate: { lte: now },
+          endDate: { gte: now },
+        },
+      })
+      console.log('Current Year (Date fallback):', currentYear?.name)
+    }
+
+    // Fallback 2: Any active year (latest created)
+    if (!currentYear) {
+      currentYear = await prisma.academicYear.findFirst({
+        where: {
+          schoolId: session.user.schoolId,
+          isActive: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      console.log('Current Year (Latest fallback):', currentYear?.name)
+    }
+
+    // Force "2026-2027" if nothing else found (Emergency Fix for debugging)
+    if (!currentYear) {
+      currentYear = await prisma.academicYear.findFirst({
+        where: { name: '2026-2027', schoolId: session.user.schoolId }
+      })
+      console.log('Current Year (Hard fallback):', currentYear?.name)
+    }
 
     if (!currentYear) {
+      console.log('No Academic Year Found for school:', session.user.schoolId)
       return NextResponse.json({
         success: true,
         data: { classTeacherClasses: [], subjectTeacherClasses: [] },
@@ -61,6 +132,7 @@ export async function GET() {
         },
       },
     })
+    console.log(`Found ${classTeacherAssignments.length} Class Assignments`)
 
     // Get classes where teacher teaches subjects
     const subjectAssignments = await prisma.teacherClassAssignment.findMany({

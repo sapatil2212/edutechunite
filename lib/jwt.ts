@@ -25,6 +25,7 @@ export async function getJWTUser(req: NextRequest) {
       schoolId: req.headers.get('x-user-schoolId') || null,
       studentId: req.headers.get('x-user-studentId') || null,
       guardianId: req.headers.get('x-user-guardianId') || null,
+      teacherId: req.headers.get('x-user-teacherId') || null,
     }
   }
   
@@ -49,5 +50,6 @@ export async function getJWTUser(req: NextRequest) {
     schoolId: payload.schoolId as string | null,
     studentId: payload.studentId as string | null | undefined,
     guardianId: payload.guardianId as string | null | undefined,
+    teacherId: payload.teacherId as string | null | undefined,
   }
 }

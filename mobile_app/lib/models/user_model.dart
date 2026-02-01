@@ -6,6 +6,7 @@ class UserModel {
   final String? schoolId;
   final String? studentId;
   final String? guardianId;
+  final String? teacherId;
   final String? token;
 
   UserModel({
@@ -16,6 +17,7 @@ class UserModel {
     this.schoolId,
     this.studentId,
     this.guardianId,
+    this.teacherId,
     this.token,
   });
 
@@ -28,6 +30,7 @@ class UserModel {
       schoolId: json['schoolId'],
       studentId: json['studentId'],
       guardianId: json['guardianId'],
+      teacherId: json['teacherId'],
       token: token,
     );
   }
@@ -41,6 +44,7 @@ class UserModel {
       'schoolId': schoolId,
       'studentId': studentId,
       'guardianId': guardianId,
+      'teacherId': teacherId,
     };
   }
 }

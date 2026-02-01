@@ -13,7 +13,8 @@ class AuthService with ChangeNotifier {
   // For iOS Simulator: 'http://localhost:3000'
   // For Physical Device on same network: 'http://YOUR_PC_IP:3000'
   // For Production: 'https://your-domain.com'
-  static const String baseUrl = 'http://localhost:3000';  // For Chrome/Web testing 
+  // static const String baseUrl = 'http://localhost:3000';
+  static const String baseUrl = 'http://10.32.106.151:3000'; // Configured for local WiFi access 
 
   UserModel? get user => _user;
   bool get isLoading => _isLoading;

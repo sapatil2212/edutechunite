@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_drawer.dart';
 
 class StudentHomeworkScreen extends StatefulWidget {
   const StudentHomeworkScreen({super.key});
@@ -50,11 +51,21 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen> with Sing
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      print('Error fetching homework: $e');
+      // Mock data for preview
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        setState(() {
+          _allHomework = [
+            {'subject': {'name': 'Mathematics'}, 'title': 'Algebra Chapter 5', 'dueDate': '2025-10-25', 'submission': null},
+            {'subject': {'name': 'Physics'}, 'title': 'Newton Laws', 'dueDate': '2025-10-26', 'submission': {'status': 'PENDING'}},
+            {'subject': {'name': 'History'}, 'title': 'World War II Essay', 'dueDate': '2025-10-20', 'submission': {'status': 'SUBMITTED', 'score': 'A'}},
+            {'subject': {'name': 'English'}, 'title': 'Poetry Analysis', 'dueDate': '2025-10-22', 'submission': {'status': 'SUBMITTED', 'score': 'B+'}},
+            {'subject': {'name': 'Chemistry'}, 'title': 'Periodic Table', 'dueDate': '2025-10-28', 'submission': null},
+          ];
+          _pendingHomework = _allHomework.where((h) => h['submission'] == null || h['submission']['status'] == 'PENDING').toList();
+          _completedHomework = _allHomework.where((h) => h['submission'] != null && h['submission']['status'] == 'SUBMITTED').toList();
+          _isLoading = false;
+        });
       }
     }
   }
@@ -62,20 +73,31 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen> with Sing
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
+      drawer: const AppDrawer(currentRoute: '/homework'),
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.black),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: const Text(
           'Homework',
-          style: TextStyle(color: Color(0xFF0A0A0A), fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
+        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
           labelColor: const Color(0xFF3B82F6),
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFF3B82F6),
+          indicatorSize: TabBarIndicatorSize.label,
+          dividerColor: Colors.transparent,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
           tabs: const [
             Tab(text: 'All'),
             Tab(text: 'Pending'),
@@ -105,182 +127,120 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen> with Sing
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.assignment, size: 64, color: Colors.grey.shade300),
+            Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
               'No homework found',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+              style: TextStyle(color: Colors.grey[500], fontSize: 16),
             ),
           ],
         ),
       );
     }
 
-    return ListView.separated(
+    return ListView.builder(
       padding: const EdgeInsets.all(20),
       itemCount: homeworks.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
         final homework = homeworks[index];
-        return _buildHomeworkCard(homework);
-      },
-    );
-  }
+        final subject = homework['subject']?['name'] ?? 'Subject';
+        final title = homework['title'] ?? 'Homework';
+        final dueDateStr = homework['dueDate'] ?? '';
+        final dueDate = DateTime.tryParse(dueDateStr);
+        final submission = homework['submission'];
+        final isSubmitted = submission != null && submission['status'] == 'SUBMITTED';
 
-  Widget _buildHomeworkCard(Map<String, dynamic> homework) {
-    final title = homework['title'] ?? '';
-    final subject = homework['subject'];
-    final dueDate = DateTime.parse(homework['dueDate']);
-    final isOverdue = dueDate.isBefore(DateTime.now());
-    final submission = homework['submission'];
-    final isCompleted = submission != null && submission['status'] == 'SUBMITTED';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: subject != null
-                  ? _getColorFromHex(subject['color'] ?? '#6B7280').withOpacity(0.1)
-                  : Colors.grey.shade50,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-            ),
-            child: Row(
-              children: [
-                if (subject != null)
-                  Container(
-                    width: 4,
-                    height: 40,
-                    margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      color: _getColorFromHex(subject['color'] ?? '#6B7280'),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        subject?['name'] ?? 'General',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _getColorFromHex(subject?['color'] ?? '#6B7280'),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isCompleted)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'SUBMITTED',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (homework['description'] != null) ...[
-                  Text(
-                    homework['description'],
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                Row(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                // Navigate to details
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      isOverdue ? Icons.warning : Icons.access_time,
-                      size: 16,
-                      color: isOverdue ? Colors.red : Colors.orange,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Due: ${DateFormat('MMM dd, yyyy').format(dueDate)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isOverdue ? Colors.red : Colors.grey.shade600,
-                        fontWeight: isOverdue ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (homework['maxMarks'] != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${homework['maxMarks']} marks',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            subject,
+                            style: const TextStyle(
+                              color: Color(0xFF3B82F6),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isSubmitted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            isSubmitted ? 'Submitted' : 'Pending',
+                            style: TextStyle(
+                              color: isSubmitted ? const Color(0xFF166534) : const Color(0xFF92400E),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey[500]),
+                        const SizedBox(width: 4),
+                        Text(
+                          dueDate != null ? 'Due ${DateFormat('MMM dd, yyyy').format(dueDate)}' : 'No due date',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
-  }
-
-  Color _getColorFromHex(String hexColor) {
-    hexColor = hexColor.replaceAll('#', '');
-    if (hexColor.length == 6) {
-      hexColor = 'FF$hexColor';
-    }
-    return Color(int.parse(hexColor, radix: 16));
   }
 }

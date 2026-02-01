@@ -86,10 +86,8 @@ export function SearchableDropdown({
         </label>
       )}
       
-      <button
-        type="button"
+      <div
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
         className={`w-full flex items-center justify-between px-3 py-2.5 text-sm bg-white dark:bg-dark-900 border rounded-lg transition-all duration-200 ${
           error
             ? 'border-red-500 dark:border-red-500'
@@ -97,6 +95,14 @@ export function SearchableDropdown({
             ? 'border-primary ring-2 ring-primary/20'
             : 'border-gray-200 dark:border-dark-700 hover:border-gray-300 dark:hover:border-dark-600'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={(e) => {
+          if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            setIsOpen(!isOpen)
+          }
+        }}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {selectedOption?.color && (
@@ -124,7 +130,7 @@ export function SearchableDropdown({
           )}
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
-      </button>
+      </div>
 
       {error && (
         <p className="mt-1 text-xs text-red-500">{error}</p>

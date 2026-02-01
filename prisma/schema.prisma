@@ -2790,11 +2790,12 @@ model ClassTeacher {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
-  // One primary class teacher per class per academic year
-  @@unique([academicUnitId, academicYearId, isPrimary])
+  // One primary class teacher per class per academic year (Application enforced for Active records)
+  // @@unique([academicUnitId, academicYearId, isPrimary])
   @@index([schoolId, academicYearId])
   @@index([teacherId, academicYearId])
   @@index([academicUnitId, isActive])
+  @@index([academicUnitId, academicYearId, isPrimary])
   @@map("class_teachers")
 }
 
@@ -2846,11 +2847,13 @@ model TeacherClassAssignment {
   updatedAt       DateTime              @updatedAt
   
   // Prevent duplicate assignments
-  @@unique([academicUnitId, subjectId, teacherId, academicYearId])
+  // Unique assignment per year (Application enforced for Active records)
+  // @@unique([academicUnitId, subjectId, teacherId, academicYearId])
   @@index([schoolId, academicYearId])
   @@index([teacherId, academicYearId])
   @@index([subjectId, academicYearId])
   @@index([academicUnitId, isActive])
+  @@index([academicUnitId, subjectId, teacherId, academicYearId])
   @@map("teacher_class_assignments")
 }
 

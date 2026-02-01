@@ -5,6 +5,36 @@ import { jwtVerify } from 'jose'
 const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'your-fallback-secret'
 
 export async function middleware(request: NextRequest) {
+  // Handle CORS
+  const origin = request.headers.get('origin')
+  
+  // Define allowed origins
+  const allowedOrigins = ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:3001']
+  const isAllowedOrigin = origin && allowedOrigins.includes(origin)
+
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    const headers = new Headers()
+    if (isAllowedOrigin) {
+      headers.set('Access-Control-Allow-Origin', origin)
+      headers.set('Access-Control-Allow-Credentials', 'true')
+    }
+    headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-User-Email, X-User-Role, X-User-SchoolId, X-User-StudentId, X-User-GuardianId, X-User-TeacherId')
+    headers.set('Access-Control-Max-Age', '86400')
+    
+    return new NextResponse(null, { headers, status: 200 })
+  }
+
+  const response = NextResponse.next()
+
+  if (isAllowedOrigin) {
+    response.headers.set('Access-Control-Allow-Origin', origin)
+    response.headers.set('Access-Control-Allow-Credentials', 'true')
+  }
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-User-Email, X-User-Role, X-User-SchoolId, X-User-StudentId, X-User-GuardianId, X-User-TeacherId')
+
   // Only handle /api/institution routes (mobile API endpoints)
   if (request.nextUrl.pathname.startsWith('/api/institution')) {
     const authHeader = request.headers.get('authorization')
@@ -24,12 +54,24 @@ export async function middleware(request: NextRequest) {
         requestHeaders.set('x-user-schoolId', (payload.schoolId as string) || '')
         requestHeaders.set('x-user-studentId', (payload.studentId as string) || '')
         requestHeaders.set('x-user-guardianId', (payload.guardianId as string) || '')
+        requestHeaders.set('x-user-teacherId', (payload.teacherId as string) || '')
         
-        return NextResponse.next({
+        // Pass the modified headers to the next response
+        const nextResponse = NextResponse.next({
           request: {
             headers: requestHeaders,
           },
         })
+        
+        // Copy CORS headers to the new response
+        if (isAllowedOrigin) {
+          nextResponse.headers.set('Access-Control-Allow-Origin', origin)
+        }
+        nextResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        nextResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        
+        return nextResponse
+
       } catch (error) {
         // Invalid token, but don't block - let NextAuth handle it
         console.log('Invalid JWT token:', error)
@@ -37,9 +79,9 @@ export async function middleware(request: NextRequest) {
     }
   }
   
-  return NextResponse.next()
+  return response
 }
 
 export const config = {
-  matcher: '/api/institution/:path*',
+  matcher: ['/api/:path*'],
 }

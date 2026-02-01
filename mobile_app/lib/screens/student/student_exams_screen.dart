@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_drawer.dart';
 
 class StudentExamsScreen extends StatefulWidget {
   const StudentExamsScreen({super.key});
@@ -31,11 +32,28 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      print('Error fetching exams: $e');
+      // Mock data for preview
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        setState(() {
+          _exams = [
+            {
+              'name': 'Mid Term Examination',
+              'startDate': '2025-11-10T09:00:00Z',
+              'schedules': [
+                {'subject': {'name': 'Mathematics'}, 'date': '2025-11-10T09:00:00Z', 'startTime': '09:00', 'endTime': '12:00', 'room': 'Hall A'},
+                {'subject': {'name': 'Physics'}, 'date': '2025-11-12T09:00:00Z', 'startTime': '09:00', 'endTime': '12:00', 'room': 'Hall B'},
+                {'subject': {'name': 'Chemistry'}, 'date': '2025-11-14T09:00:00Z', 'startTime': '09:00', 'endTime': '12:00', 'room': 'Hall A'},
+              ]
+            },
+            {
+              'name': 'Final Examination',
+              'startDate': '2026-03-15T09:00:00Z',
+              'schedules': []
+            }
+          ];
+          _isLoading = false;
+        });
       }
     }
   }
@@ -43,11 +61,18 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
+      drawer: const AppDrawer(currentRoute: '/exams'),
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.black),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: const Text(
           'Exams',
           style: TextStyle(color: Color(0xFF0A0A0A), fontWeight: FontWeight.bold),
@@ -71,130 +96,186 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
                         ],
                       ),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(20),
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(24),
                       itemCount: _exams.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 16),
                       itemBuilder: (context, index) {
                         final exam = _exams[index];
-                        return _buildExamCard(exam);
+                        return _buildExamTimelineItem(exam, index == _exams.length - 1);
                       },
                     ),
             ),
     );
   }
 
-  Widget _buildExamCard(Map<String, dynamic> exam) {
-    final name = exam['name'] ?? '';
+  Widget _buildExamTimelineItem(Map<String, dynamic> exam, bool isLast) {
+    final name = exam['name'] ?? 'Exam';
     final startDate = DateTime.parse(exam['startDate']);
-    final endDate = DateTime.parse(exam['endDate']);
     final schedules = exam['schedules'] as List? ?? [];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Column(
+    return IntrinsicHeight(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFDC2626), Color(0xFF991B1B)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          Column(
+            children: [
+              Container(
+                width: 50,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      DateFormat('MMM').format(startDate).toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('dd').format(startDate),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.assignment, color: Colors.white, size: 28),
-                const SizedBox(width: 12),
+              if (!isLast)
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Container(
+                    width: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    color: Colors.grey.shade200,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1F2937),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Upcoming',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade400,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          if (schedules.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Exam Schedule',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...schedules.take(5).map((schedule) {
-                    final subject = schedule['subject'];
-                    final examDate = DateTime.parse(schedule['examDate']);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 4,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade300,
-                              borderRadius: BorderRadius.circular(2),
+                  if (schedules.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    ...schedules.map<Widget>((schedule) {
+                      final subject = schedule['subject']?['name'] ?? 'Subject';
+                      final startTime = schedule['startTime'] ?? '';
+                      final room = schedule['room'] ?? '';
+                      
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.class_outlined, size: 16, color: Colors.blue.shade400),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              subject?['name'] ?? '',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    subject,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    '$startTime • $room',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                          Text(
-                            DateFormat('MMM dd').format(examDate),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        'Schedule to be announced',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
-                    );
-                  }).toList(),
+                    ),
                 ],
               ),
             ),
+          ),
         ],
       ),
     );

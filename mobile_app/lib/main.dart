@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/student_dashboard.dart';
 import 'screens/parent_dashboard.dart';
+import 'screens/teacher_dashboard.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 
@@ -71,9 +72,18 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) {
       if (authService.isAuthenticated) {
         final role = authService.user?.role;
+        Widget nextScreen;
+        if (role == 'PARENT') {
+          nextScreen = const ParentDashboard();
+        } else if (role == 'TEACHER' || role == 'STAFF') {
+          nextScreen = const TeacherDashboard();
+        } else {
+          nextScreen = const StudentDashboard();
+        }
+        
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => role == 'PARENT' ? const ParentDashboard() : const StudentDashboard(),
+            builder: (_) => nextScreen,
           ),
         );
       } else {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions, verifyToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 interface RouteParams {
@@ -8,12 +8,42 @@ interface RouteParams {
 }
 
 /**
+ * Helper to get session from cookie or Bearer token
+ */
+async function getSessionOrToken(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (session) return session
+
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1]
+    const payload = await verifyToken(token)
+    
+    if (payload) {
+      return {
+        user: {
+          id: payload.userId,
+          email: payload.email,
+          name: payload.fullName,
+          role: payload.role,
+          schoolId: payload.schoolId,
+          teacherId: payload.teacherId,
+        }
+      }
+    }
+  }
+  return null
+}
+
+export const dynamic = 'force-dynamic'
+
+/**
  * GET /api/institution/teachers/my-classes/[classId]/students
  * Get students in a class for the teacher
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSessionOrToken(req)
     
     if (!session?.user?.schoolId) {
       return NextResponse.json(

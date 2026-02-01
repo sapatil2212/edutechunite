@@ -166,6 +166,25 @@ export async function checkSubjectIsActive(subjectId: string): Promise<boolean> 
   return subject?.isActive ?? false
 }
 
+// Check for duplicate class teacher assignment
+export async function checkDuplicateClassTeacherAssignment(
+  academicUnitId: string,
+  teacherId: string,
+  academicYearId: string,
+  excludeId?: string
+): Promise<boolean> {
+  const existing = await prisma.classTeacher.findFirst({
+    where: {
+      academicUnitId,
+      teacherId,
+      academicYearId,
+      isActive: true,
+      ...(excludeId && { id: { not: excludeId } }),
+    },
+  })
+  return !!existing
+}
+
 /**
  * Comprehensive validation for Class Teacher assignment
  */
@@ -200,6 +219,12 @@ export async function validateClassTeacherAssignment(params: {
   const unitActive = await checkAcademicUnitIsActive(academicUnitId)
   if (!unitActive) {
     errors.push('Cannot assign class teacher to an inactive class/section')
+  }
+
+  // Check for duplicate assignment (teacher already assigned to this class)
+  const isDuplicate = await checkDuplicateClassTeacherAssignment(academicUnitId, teacherId, academicYearId, excludeId)
+  if (isDuplicate) {
+    errors.push('This teacher is already assigned as a class teacher or co-class teacher for this class')
   }
 
   // CT-1: Check existing primary class teacher

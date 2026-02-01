@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_drawer.dart';
 
 class StudentNoticesScreen extends StatefulWidget {
   const StudentNoticesScreen({super.key});
@@ -43,7 +44,8 @@ class _StudentNoticesScreenState extends State<StudentNoticesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
+      drawer: const AppDrawer(currentRoute: '/notices'),
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
@@ -111,7 +113,14 @@ class _StudentNoticesScreenState extends State<StudentNoticesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: priority == 'CRITICAL' ? Colors.red.shade200 : Colors.grey.shade100),
+        border: priority == 'CRITICAL' ? Border.all(color: Colors.red.shade200) : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

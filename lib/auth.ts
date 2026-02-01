@@ -160,20 +160,37 @@ import { jwtVerify } from 'jose';
 
 export async function verifyToken(token: string) {
   try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
-    const { payload } = await jwtVerify(token, secret);
-    
-    return {
-      userId: payload.id as string,
-      email: payload.email as string,
-      fullName: payload.name as string,
-      role: payload.role as string,
-      schoolId: payload.schoolId as string | null,
-      studentId: payload.studentId as string | null,
-      guardianId: payload.guardianId as string | null,
-      teacherId: payload.teacherId as string | null,
-    };
+    // Try checking against JWT_SECRET first (used by mobile login)
+    let secret = new TextEncoder().encode(process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'your-fallback-secret');
+    try {
+      const { payload } = await jwtVerify(token, secret);
+      return {
+        userId: payload.id as string,
+        email: payload.email as string,
+        fullName: payload.name as string,
+        role: payload.role as string,
+        schoolId: payload.schoolId as string | null,
+        studentId: payload.studentId as string | null,
+        guardianId: payload.guardianId as string | null,
+        teacherId: payload.teacherId as string | null,
+      };
+    } catch (e) {
+      // If failed, try NEXTAUTH_SECRET (used by web login)
+      secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+      const { payload } = await jwtVerify(token, secret);
+      return {
+        userId: payload.id as string,
+        email: payload.email as string,
+        fullName: payload.name as string,
+        role: payload.role as string,
+        schoolId: payload.schoolId as string | null,
+        studentId: payload.studentId as string | null,
+        guardianId: payload.guardianId as string | null,
+        teacherId: payload.teacherId as string | null,
+      };
+    }
   } catch (error) {
+    console.error('Token verification failed:', error);
     return null;
   }
 }

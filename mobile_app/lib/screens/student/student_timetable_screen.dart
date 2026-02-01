@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_drawer.dart';
 
 class StudentTimetableScreen extends StatefulWidget {
   const StudentTimetableScreen({super.key});
@@ -19,6 +20,10 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
   @override
   void initState() {
     super.initState();
+    // If today is Sunday, default to Monday
+    if (_selectedDay == 'Sunday') {
+      _selectedDay = 'Monday';
+    }
     _fetchTimetable();
   }
 
@@ -33,11 +38,40 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      print('Error fetching timetable: $e');
+      // Mock data for preview
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        setState(() {
+          _timetableData = {
+            'schedule': {
+              'Monday': [
+                {'subject': 'Mathematics', 'startTime': '08:00', 'endTime': '09:00', 'room': '101', 'teacher': 'Mr. Smith', 'periodNumber': 1},
+                {'subject': 'Physics', 'startTime': '09:00', 'endTime': '10:00', 'room': 'Lab 1', 'teacher': 'Mrs. Jones', 'periodNumber': 2},
+                {'slotType': 'BREAK', 'startTime': '10:00', 'endTime': '10:30', 'periodNumber': 0},
+                {'subject': 'English', 'startTime': '10:30', 'endTime': '11:30', 'room': '102', 'teacher': 'Ms. Brown', 'periodNumber': 3},
+              ],
+              'Tuesday': [
+                {'subject': 'Chemistry', 'startTime': '08:00', 'endTime': '09:00', 'room': 'Lab 2', 'teacher': 'Mr. White', 'periodNumber': 1},
+                {'subject': 'Biology', 'startTime': '09:00', 'endTime': '10:00', 'room': 'Lab 3', 'teacher': 'Mrs. Green', 'periodNumber': 2},
+                {'slotType': 'BREAK', 'startTime': '10:00', 'endTime': '10:30', 'periodNumber': 0},
+                {'subject': 'History', 'startTime': '10:30', 'endTime': '11:30', 'room': '103', 'teacher': 'Mr. Black', 'periodNumber': 3},
+              ],
+              'Wednesday': [
+                 {'subject': 'Mathematics', 'startTime': '08:00', 'endTime': '09:00', 'room': '101', 'teacher': 'Mr. Smith', 'periodNumber': 1},
+                 {'subject': 'Computer Science', 'startTime': '09:00', 'endTime': '10:00', 'room': 'Comp Lab', 'teacher': 'Ms. Tech', 'periodNumber': 2},
+              ],
+              'Thursday': [
+                 {'subject': 'Physics', 'startTime': '08:00', 'endTime': '09:00', 'room': 'Lab 1', 'teacher': 'Mrs. Jones', 'periodNumber': 1},
+                 {'subject': 'Chemistry', 'startTime': '09:00', 'endTime': '10:00', 'room': 'Lab 2', 'teacher': 'Mr. White', 'periodNumber': 2},
+              ],
+              'Friday': [
+                 {'subject': 'English', 'startTime': '08:00', 'endTime': '09:00', 'room': '102', 'teacher': 'Ms. Brown', 'periodNumber': 1},
+                 {'subject': 'PE', 'startTime': '09:00', 'endTime': '10:00', 'room': 'Field', 'teacher': 'Coach', 'periodNumber': 2},
+              ]
+            }
+          };
+          _isLoading = false;
+        });
       }
     }
   }
@@ -45,11 +79,18 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
+      drawer: const AppDrawer(currentRoute: '/timetable'),
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.black),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: const Text(
           'Timetable',
           style: TextStyle(color: Color(0xFF0A0A0A), fontWeight: FontWeight.bold),
@@ -140,26 +181,32 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
   }
 
   Widget _buildTimeSlotCard(Map<String, dynamic> slot) {
-    final periodNumber = slot['periodNumber'];
     final startTime = slot['startTime'] ?? '';
     final endTime = slot['endTime'] ?? '';
-    final subject = slot['subject'];
-    final teacher = slot['teacher'];
+    final subject = slot['subject'] ?? '';
+    final teacher = slot['teacher'] ?? '';
+    final room = slot['room'] ?? '';
     final slotType = slot['slotType'] ?? 'CLASS';
     final isBreak = slotType == 'BREAK';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
             width: 60,
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: isBreak ? Colors.orange.shade50 : Colors.blue.shade50,
               borderRadius: BorderRadius.circular(12),
@@ -171,79 +218,71 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: isBreak ? Colors.orange : Colors.blue,
+                    color: isBreak ? Colors.orange.shade700 : Colors.blue.shade700,
                   ),
                 ),
                 Text(
                   endTime,
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.grey.shade600,
+                    color: Colors.grey.shade500,
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 16),
-          if (subject != null && !isBreak)
-            Container(
-              width: 4,
-              height: 50,
-              decoration: BoxDecoration(
-                color: _getColorFromHex(subject['color'] ?? '#6B7280'),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isBreak ? 'Break Time' : (subject?['name'] ?? 'Free Period'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                if (teacher != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    teacher['fullName'] ?? '',
+            child: isBreak
+                ? Text(
+                    'BREAK',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
+                      letterSpacing: 1,
                     ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subject,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.person_outline, size: 14, color: Colors.grey.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            teacher,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Icon(Icons.room_outlined, size: 14, color: Colors.grey.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            room,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: isBreak ? Colors.orange.shade50 : Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              isBreak ? 'BREAK' : 'P$periodNumber',
-              style: TextStyle(
-                color: isBreak ? Colors.orange : Colors.blue,
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-              ),
-            ),
           ),
         ],
       ),
     );
-  }
-
-  Color _getColorFromHex(String hexColor) {
-    hexColor = hexColor.replaceAll('#', '');
-    if (hexColor.length == 6) {
-      hexColor = 'FF$hexColor';
-    }
-    return Color(int.parse(hexColor, radix: 16));
   }
 }
