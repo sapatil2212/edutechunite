@@ -17,6 +17,127 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const isWeekly = searchParams.get('weekly') === 'true'
     
+    const today = new Date()
+    const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    const currentDay = days[today.getDay()] as DayOfWeek
+    const weekDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+
+    // Handle TEACHER role - show their teaching schedule across all classes
+    if (session.user.role === 'TEACHER') {
+      const teacher = await prisma.teacher.findFirst({
+        where: { userId: session.user.id },
+        select: { id: true, schoolId: true }
+      })
+
+      if (!teacher) {
+        return NextResponse.json({ error: 'Teacher not found' }, { status: 404 })
+      }
+
+      // Check if teacher is a class teacher - if so, also get the class timetable
+      const classTeacherAssignment = await prisma.classTeacher.findFirst({
+        where: {
+          teacherId: teacher.id,
+          isActive: true,
+          isPrimary: true
+        },
+        select: { academicUnitId: true }
+      })
+
+      // Get all published timetable slots where this teacher is assigned
+      const teacherSlots = await prisma.timetableSlot.findMany({
+        where: {
+          OR: [
+            // Slots where teacher is assigned to teach
+            { teacherId: teacher.id },
+            // Slots from the class where teacher is class teacher
+            ...(classTeacherAssignment ? [{ academicUnitId: classTeacherAssignment.academicUnitId }] : [])
+          ],
+          isActive: true,
+          timetable: {
+            status: 'PUBLISHED',
+            schoolId: teacher.schoolId
+          }
+        },
+        include: {
+          subject: {
+            select: { name: true, code: true, color: true }
+          },
+          teacher: {
+            select: { fullName: true }
+          },
+          academicUnit: {
+            select: { 
+              id: true, 
+              name: true,
+              parent: { select: { name: true } }
+            }
+          },
+          timetable: {
+            include: {
+              template: {
+                include: {
+                  periodTimings: {
+                    orderBy: { periodNumber: 'asc' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { periodNumber: 'asc' }]
+      })
+
+      if (teacherSlots.length === 0) {
+        return NextResponse.json({ 
+          success: true,
+          data: {
+            schedule: {},
+            periodTimings: {}
+          }
+        })
+      }
+
+      // Get period timings from the first timetable (assuming consistent template)
+      const periodTimingsMap: Record<number, any> = {}
+      teacherSlots.forEach(slot => {
+        slot.timetable.template.periodTimings.forEach(timing => {
+          if (!periodTimingsMap[timing.periodNumber]) {
+            periodTimingsMap[timing.periodNumber] = {
+              periodNumber: timing.periodNumber,
+              name: timing.name,
+              startTime: timing.startTime,
+              endTime: timing.endTime,
+              isBreak: timing.isBreak
+            }
+          }
+        })
+      })
+
+      // Group slots by day for teacher
+      const schedule: Record<string, any[]> = {}
+      weekDays.forEach(day => {
+        schedule[day] = teacherSlots
+          .filter(s => s.dayOfWeek === day)
+          .map(slot => ({
+            periodNumber: slot.periodNumber,
+            subject: slot.subject,
+            teacher: slot.teacher,
+            room: slot.room,
+            slotType: slot.slotType,
+            academicUnit: slot.academicUnit
+          }))
+      })
+
+      return NextResponse.json({ 
+        success: true,
+        data: {
+          schedule,
+          periodTimings: periodTimingsMap
+        }
+      })
+    }
+
+    // Handle STUDENT and PARENT roles
     let studentId = session.user.studentId
     
     if (session.user.role === 'PARENT') {
@@ -35,11 +156,27 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
         studentId = requestedStudentId
+      } else {
+        // Get first linked student for parent
+        const linkedStudent = await prisma.studentGuardian.findFirst({
+          where: {
+            guardian: { userId: session.user.id }
+          },
+          select: { studentId: true }
+        })
+        studentId = linkedStudent?.studentId || null
       }
     }
 
     if (!studentId) {
-      return NextResponse.json({ error: 'Student ID not found' }, { status: 400 })
+      return NextResponse.json({ 
+        success: true,
+        data: {
+          schedule: {},
+          periodTimings: [],
+          message: 'No student profile linked'
+        }
+      })
     }
 
     const student = await prisma.student.findUnique({
@@ -51,9 +188,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
-    const today = new Date()
-    const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-    const currentDay = days[today.getDay()] as DayOfWeek
+    if (!student.academicUnitId) {
+      return NextResponse.json({ 
+        success: true,
+        data: {
+          schedule: {},
+          periodTimings: [],
+          message: 'Student not assigned to any class'
+        }
+      })
+    }
 
     const timetable = await prisma.timetable.findFirst({
       where: {
@@ -62,7 +206,7 @@ export async function GET(req: NextRequest) {
       },
       include: {
         slots: {
-          where: isWeekly ? {} : { dayOfWeek: currentDay },
+          where: isWeekly ? { isActive: true } : { dayOfWeek: currentDay, isActive: true },
           include: {
             subject: {
               select: { name: true, code: true, color: true }
@@ -84,13 +228,17 @@ export async function GET(req: NextRequest) {
     })
 
     if (!timetable) {
-      return NextResponse.json(isWeekly ? { schedule: {}, periodTimings: [] } : { todaySchedule: [] })
+      return NextResponse.json({ 
+        success: true,
+        data: isWeekly 
+          ? { schedule: {}, periodTimings: [], message: 'No published timetable for your class' } 
+          : { todaySchedule: [], message: 'No published timetable for your class' }
+      })
     }
 
     if (isWeekly) {
       // Group slots by day
-      const schedule: any = {}
-      const weekDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+      const schedule: Record<string, any[]> = {}
       
       weekDays.forEach(day => {
         schedule[day] = timetable.slots
@@ -129,7 +277,10 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ todaySchedule })
+    return NextResponse.json({ 
+      success: true,
+      data: { todaySchedule }
+    })
   } catch (error) {
     console.error('Error fetching schedule:', error)
     return NextResponse.json(

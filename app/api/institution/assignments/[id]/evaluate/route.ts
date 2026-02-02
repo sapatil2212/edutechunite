@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getJWTUser } from '@/lib/jwt'
 import prisma from '@/lib/prisma'
 
 interface RouteParams {
@@ -10,24 +11,29 @@ interface RouteParams {
 // POST: Evaluate a submission
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(req)
     
-    if (!session?.user?.schoolId) {
+    const user = session?.user || jwtUser
+    
+    if (!user?.schoolId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Only SCHOOL_ADMIN and TEACHER can evaluate
-    if (!['SCHOOL_ADMIN', 'SUPER_ADMIN', 'TEACHER'].includes(session.user.role)) {
+    if (!['SCHOOL_ADMIN', 'SUPER_ADMIN', 'TEACHER'].includes(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    const body = await req.json()
     const { id: assignmentId } = params
 
     // Get teacher profile
     let teacherId: string | null = null
-    if (session.user.role === 'TEACHER') {
+    if (user.role === 'TEACHER') {
       const teacher = await prisma.teacher.findFirst({
-        where: { userId: session.user.id },
+        where: { userId: user.id },
       })
       if (!teacher) {
         return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 })
@@ -35,12 +41,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       teacherId = teacher.id
     } else {
       // For admin, use first available teacher or specified one
-      const body = await req.json()
       if (body.evaluatedById) {
         teacherId = body.evaluatedById
       } else {
         const teacher = await prisma.teacher.findFirst({
-          where: { schoolId: session.user.schoolId },
+          where: { schoolId: user.schoolId },
         })
         if (teacher) teacherId = teacher.id
       }
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const assignment = await prisma.assignment.findFirst({
       where: {
         id: assignmentId,
-        schoolId: session.user.schoolId,
+        schoolId: user.schoolId,
       },
     })
 
@@ -62,7 +67,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 })
     }
 
-    const body = await req.json()
     const { submissionId, marksObtained, feedback, status = 'EVALUATED', evaluatedAttachments } = body
 
     if (!submissionId) {
@@ -148,6 +152,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       })
 
       return newEvaluation
+    }, {
+      maxWait: 5000, // Wait max 5s for transaction to start
+      timeout: 10000 // Allow 10s for transaction to complete
     })
 
     return NextResponse.json({
@@ -166,9 +173,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 // GET: Get evaluation for a submission
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(req)
     
-    if (!session?.user?.schoolId) {
+    const user = session?.user || jwtUser
+    
+    if (!user?.schoolId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -184,7 +195,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const assignment = await prisma.assignment.findFirst({
       where: {
         id: assignmentId,
-        schoolId: session.user.schoolId,
+        schoolId: user.schoolId,
       },
     })
 

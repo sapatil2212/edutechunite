@@ -29,6 +29,10 @@ import {
   User,
   UserSquare2,
   Home,
+  Award,
+  CalendarCheck,
+  PenTool,
+  TrendingUp,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -41,7 +45,7 @@ interface MenuItem {
 
 export const DashboardSidebar: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['academic-setup'])
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['academic-setup', 'exams'])
   const pathname = usePathname()
   const { data: session } = useSession()
   
@@ -87,6 +91,21 @@ export const DashboardSidebar: React.FC = () => {
     { icon: Users, label: 'Students', href: '/dashboard/students', badge: null },
     { icon: Calendar, label: 'Schedule', href: '/dashboard/schedule', badge: null },
     { icon: FileText, label: 'Assignments', href: '/dashboard/assignments', badge: null },
+    { 
+      icon: Award, 
+      label: 'Exams', 
+      href: '/dashboard/exams',
+      children: [
+        { icon: Award, label: 'All Exams', href: '/dashboard/exams' },
+        { icon: Calendar, label: 'Exam Timetable', href: '/dashboard/exams/timetable' },
+        { icon: CalendarCheck, label: 'Exam Schedule', href: '/dashboard/exams/schedule' },
+        { icon: ClipboardList, label: 'Exam Attendance', href: '/dashboard/exams/attendance' },
+        { icon: PenTool, label: 'Marks Entry', href: '/dashboard/exams/marks-entry' },
+        { icon: Trophy, label: 'Results', href: '/dashboard/exams/results' },
+        { icon: FileText, label: 'Report Cards', href: '/dashboard/exams/report-cards' },
+        { icon: TrendingUp, label: 'Analytics', href: '/dashboard/exams/analytics' },
+      ]
+    },
     { icon: BarChart3, label: 'Analytics', href: '/dashboard/analytics', badge: null },
     { 
       icon: DollarSign, 
@@ -136,13 +155,18 @@ export const DashboardSidebar: React.FC = () => {
       ]
     },
     { 
-      icon: BarChart3, 
-      label: 'Assessments', 
-      href: '/teacher/assessments',
+      icon: Award, 
+      label: 'Exams', 
+      href: '/teacher/exams',
       children: [
-        { icon: FileEdit, label: 'Exams', href: '/teacher/exams' },
-        { icon: BarChart3, label: 'Grades', href: '/teacher/grades' },
-        { icon: FileText, label: 'Reports', href: '/teacher/reports' },
+        { icon: Award, label: 'All Exams', href: '/teacher/exams' },
+        { icon: Calendar, label: 'Exam Timetable', href: '/teacher/exams/timetable' },
+        { icon: CalendarCheck, label: 'Exam Schedule', href: '/teacher/exams/schedule' },
+        { icon: ClipboardList, label: 'Exam Attendance', href: '/teacher/exams/attendance' },
+        { icon: PenTool, label: 'Marks Entry', href: '/teacher/exams/marks-entry' },
+        { icon: Trophy, label: 'Results', href: '/teacher/exams/results' },
+        { icon: FileText, label: 'Report Cards', href: '/teacher/exams/report-cards' },
+        { icon: TrendingUp, label: 'Analytics', href: '/teacher/exams/analytics' },
       ]
     },
     { icon: Clock, label: 'My Timetable', href: '/teacher/timetable', badge: null },
@@ -152,37 +176,47 @@ export const DashboardSidebar: React.FC = () => {
 
   // Student menu items
   const studentMenuItems: MenuItem[] = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/student', badge: null },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard/student', badge: null },
     {
       icon: GraduationCap,
       label: 'Academics',
-      href: '/student/academics',
+      href: '/dashboard/student/academics',
       children: [
-        { icon: Clock, label: 'Timetable', href: '/student/timetable' },
-        { icon: ClipboardList, label: 'Attendance', href: '/student/attendance' },
-        { icon: BookMarked, label: 'Subjects', href: '/student/subjects' },
+        { icon: Clock, label: 'Timetable', href: '/dashboard/student/timetable' },
+        { icon: ClipboardList, label: 'Attendance', href: '/dashboard/student/attendance' },
+        { icon: BookMarked, label: 'Subjects', href: '/dashboard/student/subjects' },
+      ]
+    },
+    {
+      icon: Award,
+      label: 'Exams',
+      href: '/dashboard/student/exams',
+      children: [
+        { icon: FileEdit, label: 'My Exams', href: '/dashboard/student/exams' },
+        { icon: CalendarCheck, label: 'Exam Schedule', href: '/dashboard/student/exams?tab=schedule' },
+        { icon: FileText, label: 'Hall Tickets', href: '/dashboard/student/exams?tab=halltickets' },
+        { icon: Trophy, label: 'Results', href: '/dashboard/student/exams?tab=results' },
       ]
     },
     {
       icon: BarChart3,
       label: 'Assessments',
-      href: '/student/assessments',
+      href: '/dashboard/student/assessments',
       children: [
-        { icon: FileText, label: 'Homework', href: '/student/homework' },
-        { icon: FileEdit, label: 'Exams', href: '/student/exams' },
-        { icon: Trophy, label: 'Results', href: '/student/results' },
+        { icon: FileText, label: 'Homework', href: '/dashboard/student/homework' },
+        { icon: TrendingUp, label: 'Performance', href: '/dashboard/student/performance' },
       ]
     },
-    { icon: Layers, label: 'Resources', href: '/student/resources', badge: null },
-    { icon: Bell, label: 'Notices', href: '/student/notices', badge: null },
-    { icon: CreditCard, label: 'Fees', href: '/student/fees', badge: null },
+    { icon: Layers, label: 'Resources', href: '/dashboard/student/resources', badge: null },
+    { icon: Bell, label: 'Notices', href: '/dashboard/student/notices', badge: null },
+    { icon: CreditCard, label: 'Fees', href: '/dashboard/student/fees', badge: null },
     {
       icon: User,
       label: 'Profile',
-      href: '/student/profile',
+      href: '/dashboard/student/profile',
       children: [
-        { icon: UserSquare2, label: 'My Profile', href: '/student/profile' },
-        { icon: Settings, label: 'Change Password', href: '/student/profile?tab=password' },
+        { icon: UserSquare2, label: 'My Profile', href: '/dashboard/student/profile' },
+        { icon: Settings, label: 'Change Password', href: '/dashboard/student/profile?tab=password' },
       ]
     },
   ]

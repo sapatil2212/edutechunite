@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/user_model.dart';
 
 class AuthService with ChangeNotifier {
@@ -13,9 +14,8 @@ class AuthService with ChangeNotifier {
   // For iOS Simulator: 'http://localhost:3000'
   // For Physical Device on same network: 'http://YOUR_PC_IP:3000'
   // For Production: 'https://your-domain.com'
-  // static const String baseUrl = 'http://localhost:3000';
-  static const String baseUrl = 'http://10.32.106.151:3000'; // Configured for local WiFi access 
-
+  static String get baseUrl => dotenv.env['API_URL'] ?? 'http://localhost:3000';
+  
   UserModel? get user => _user;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _user != null;

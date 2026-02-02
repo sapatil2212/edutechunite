@@ -25,10 +25,7 @@ export default function StudentLayout({
       router.push('/dashboard')
     }
 
-    // Force password change if required
-    if (status === 'authenticated' && session?.user?.mustChangePassword) {
-      router.push('/student/profile?tab=password&forceChange=true')
-    }
+
   }, [status, session, router])
 
   if (status === 'loading') {

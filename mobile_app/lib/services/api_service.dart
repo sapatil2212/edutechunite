@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' as http_parser;
 import 'auth_service.dart';
 
 class ApiService {
@@ -87,11 +88,62 @@ class ApiService {
   }
 
   // Homework APIs
-  Future<Map<String, dynamic>> getHomework({String? studentId, bool upcoming = false}) async {
-    String endpoint = '/api/institution/homework?';
-    if (upcoming) endpoint += 'upcoming=true&';
-    if (studentId != null) endpoint += 'studentId=$studentId';
+  Future<Map<String, dynamic>> getAssignments({
+    String? studentId,
+    bool upcoming = false,
+    String? academicYearId,
+    String? academicUnitId,
+    String? subjectId,
+    String? status,
+    String? type,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    String endpoint = '/api/institution/assignments?page=$page&limit=$limit';
+    
+    // Add parameters if they exist
+    if (upcoming) endpoint += '&upcoming=true';
+    if (studentId != null) endpoint += '&studentId=$studentId';
+    if (academicYearId != null) endpoint += '&academicYearId=$academicYearId';
+    if (academicUnitId != null) endpoint += '&academicUnitId=$academicUnitId';
+    if (subjectId != null) endpoint += '&subjectId=$subjectId';
+    if (status != null) endpoint += '&status=$status';
+    if (type != null) endpoint += '&type=$type';
+    
     return await get(endpoint);
+  }
+
+
+  // Alias for backward compatibility if needed, or just replace usages
+  Future<Map<String, dynamic>> getHomework({String? studentId, bool upcoming = false}) async {
+    return getAssignments(studentId: studentId, upcoming: upcoming);
+  }
+
+  Future<Map<String, dynamic>> getAssignmentDetails(String id) async {
+    final response = await get('/api/institution/assignments/$id');
+    if (response['assignment'] != null) {
+      return {
+        'success': true,
+        'data': response['assignment'],
+      };
+    }
+    return response;
+  }
+
+  Future<Map<String, dynamic>> submitAssignment(String id, Map<String, dynamic> data) async {
+    return await post('/api/institution/assignments/$id/submissions', data);
+  }
+
+  Future<Map<String, dynamic>> getAssignmentSubmissions(String id) async {
+    return await get('/api/institution/assignments/$id/submissions');
+  }
+
+  Future<Map<String, dynamic>> evaluateSubmission(String assignmentId, Map<String, dynamic> data) async {
+    return await post('/api/institution/assignments/$assignmentId/evaluate', data);
+  }
+
+  Future<Map<String, dynamic>> evaluateAssignment(String assignmentId, Map<String, dynamic> data) async {
+    return await post('/api/institution/assignments/$assignmentId/evaluate', data);
   }
 
   // Exams APIs
@@ -149,9 +201,8 @@ class ApiService {
   }
 
   // Resources APIs
-  Future<Map<String, dynamic>> getResources() async {
-    return await get('/api/institution/resources');
-  }
+  // Removed duplicate getResources without parameters
+
 
   // Teacher APIs
   Future<Map<String, dynamic>> getTeacherClasses() async {
@@ -201,5 +252,121 @@ class ApiService {
 
   Future<Map<String, dynamic>> updateTeacherProfile(Map<String, dynamic> data) async {
     return await put('/api/institution/teachers/me', data);
+  }
+
+
+  Future<Map<String, dynamic>> createAssignment(Map<String, dynamic> data) async {
+    return await post('/api/institution/assignments', data);
+  }
+
+  Future<Map<String, dynamic>> updateAssignment(String id, Map<String, dynamic> data) async {
+    return await put('/api/institution/assignments/$id', data);
+  }
+
+  Future<Map<String, dynamic>> deleteAssignment(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/api/institution/assignments/$id'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to delete assignment: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadFile(dynamic fileData, String folder, {String? fileName}) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/api/institution/upload'),
+      );
+      request.headers.addAll(_headers);
+      
+      // Handle both file path (mobile) and bytes (web)
+      if (fileData is String) {
+        // Mobile: file path
+        request.files.add(await http.MultipartFile.fromPath('file', fileData));
+      } else if (fileData is List<int>) {
+        // Web: bytes - need to determine MIME type from filename
+        String? contentType;
+        if (fileName != null) {
+          final ext = fileName.toLowerCase().split('.').last;
+          final mimeTypes = {
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'zip': 'application/zip',
+          };
+          contentType = mimeTypes[ext];
+        }
+        
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          fileData,
+          filename: fileName ?? 'file',
+          contentType: contentType != null ? http_parser.MediaType.parse(contentType) : null,
+        ));
+      } else {
+        throw Exception('Invalid file data type');
+      }
+      
+      request.fields['folder'] = folder;
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to upload file: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error during upload: $e');
+    }
+  }
+
+  // Resources APIs
+  Future<Map<String, dynamic>> getResources({
+    String? academicUnitId,
+    String? subjectId,
+    String? type,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    String endpoint = '/api/institution/resources?page=$page&limit=$limit';
+    if (academicUnitId != null) endpoint += '&academicUnitId=$academicUnitId';
+    if (subjectId != null) endpoint += '&subjectId=$subjectId';
+    if (type != null) endpoint += '&type=$type';
+    return await get(endpoint);
+  }
+
+  Future<Map<String, dynamic>> createResource(Map<String, dynamic> data) async {
+    return await post('/api/institution/resources', data);
+  }
+
+  // Academic Structure APIs
+  Future<Map<String, dynamic>> getAcademicYears() async {
+    return await get('/api/institution/academic-years');
+  }
+
+  Future<Map<String, dynamic>> getAcademicUnits({
+    String? academicYearId,
+    String? parentId,
+    bool includeChildren = false,
+  }) async {
+    String endpoint = '/api/institution/academic-units?';
+    if (academicYearId != null) endpoint += 'academicYearId=$academicYearId&';
+    if (parentId != null) endpoint += 'parentId=$parentId&';
+    if (includeChildren) endpoint += 'includeChildren=true';
+    return await get(endpoint);
   }
 }

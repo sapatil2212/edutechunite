@@ -9,6 +9,8 @@ import '../widgets/app_drawer.dart';
 import '../widgets/profile_content.dart';
 import 'teacher/mark_attendance_screen.dart';
 import 'teacher/attendance_report_screen.dart';
+import 'teacher/create_assignment_screen.dart';
+import 'teacher/teacher_assignments_screen.dart';
 
 class TeacherDashboard extends StatefulWidget {
   final int initialIndex;
@@ -663,7 +665,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
                 icon: Icons.assignment,
                 color: Colors.purple,
                 onTap: () {
-                  // TODO: Implement assignments
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TeacherAssignmentsScreen(),
+                    ),
+                  );
                 },
               ),
             ),
@@ -1081,48 +1088,5 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
     );
   }
 
-  Widget _buildProfileTab(dynamic user) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: const Color(0xFF3B82F6),
-            child: Text(
-              user?.name?.isNotEmpty == true ? user.name[0].toUpperCase() : 'T',
-              style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            user?.name ?? 'Teacher Name',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            user?.email ?? 'teacher@example.com',
-            style: const TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: () {
-              Provider.of<AuthService>(context, listen: false).logout();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed unused _buildProfileTab
 }

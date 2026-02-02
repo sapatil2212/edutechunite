@@ -98,6 +98,7 @@ interface Timetable {
   template: TimetableTemplate
   academicUnit: AcademicUnit & { academicYear: AcademicYear }
   slots: TimetableSlot[]
+  _count?: { slots: number }
 }
 
 interface TimetableSlot {
@@ -169,6 +170,8 @@ export default function TimetablePage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [view, setView] = useState<'list' | 'edit'>('list')
+  const [activeTab, setActiveTab] = useState<'create' | 'published'>('published')
+  const [publishedTimetables, setPublishedTimetables] = useState<Timetable[]>([])
 
   // Modal states
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false)
@@ -196,6 +199,7 @@ export default function TimetablePage() {
   // Fetch initial data
   useEffect(() => {
     fetchInitialData()
+    fetchPublishedTimetables()
   }, [])
 
   // Fetch academic units when year changes
@@ -255,6 +259,18 @@ export default function TimetablePage() {
       }
     } catch (err) {
       console.error('Fetch units error:', err)
+    }
+  }
+
+  const fetchPublishedTimetables = async () => {
+    try {
+      const response = await fetch('/api/institution/timetable?status=PUBLISHED')
+      const data = await response.json()
+      if (data.success) {
+        setPublishedTimetables(data.data || [])
+      }
+    } catch (err) {
+      console.error('Fetch published timetables error:', err)
     }
   }
 
@@ -609,7 +625,116 @@ export default function TimetablePage() {
                 </div>
               </div>
 
-              {templates.length === 0 ? (
+              {/* Tabs */}
+              <div className="flex border-b border-gray-200 dark:border-dark-700 mb-6">
+                <button
+                  onClick={() => setActiveTab('published')}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'published'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Eye className="w-4 h-4 inline-block mr-2" />
+                  Published Timetables ({publishedTimetables.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'create'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Edit3 className="w-4 h-4 inline-block mr-2" />
+                  Create / Edit
+                </button>
+              </div>
+
+              {/* Published Timetables Tab */}
+              {activeTab === 'published' && (
+                <div className="space-y-4">
+                  {publishedTimetables.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-700 p-12 text-center"
+                    >
+                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Calendar className="w-8 h-8 text-green-600 dark:text-green-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                        No Published Timetables
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-sm mx-auto">
+                        Create and publish timetables to make them visible to teachers and students.
+                      </p>
+                      <Button onClick={() => setActiveTab('create')}>
+                        <Plus className="w-4 h-4" />
+                        Create Timetable
+                      </Button>
+                    </motion.div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {publishedTimetables.map((tt) => (
+                        <motion.div
+                          key={tt.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-700 overflow-hidden hover:shadow-lg transition-shadow"
+                        >
+                          <div className="p-4 border-b border-gray-100 dark:border-dark-700 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                                  <Calendar className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    {tt.academicUnit.parent
+                                      ? `${tt.academicUnit.parent.name} - ${tt.academicUnit.name}`
+                                      : tt.academicUnit.name}
+                                  </h3>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {tt.template.name}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                Published
+                              </span>
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-3">
+                              <span>Version {tt.version}</span>
+                              <span>{tt._count?.slots || 0} periods</span>
+                            </div>
+                            {tt.publishedAt && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                Published: {new Date(tt.publishedAt).toLocaleDateString()}
+                              </p>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => loadTimetable(tt.id)}
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Timetable
+                            </Button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Create/Edit Tab */}
+              {activeTab === 'create' && (
+                templates.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -768,7 +893,7 @@ export default function TimetablePage() {
                     </div>
                   </div>
                 </div>
-              )}
+              ))}
             </>
           ) : currentTimetable ? (
             <>

@@ -1,37 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getJWTUser } from '@/lib/jwt'
 import prisma from '@/lib/prisma'
 
 // GET - List all academic years for the institution
 export async function GET(request: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(request)
+    
+    const user = session?.user || jwtUser
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { schoolId: true, role: true },
-    })
-
-    if (!user?.schoolId) {
-      return NextResponse.json(
-        { success: false, message: 'No institution associated' },
-        { status: 404 }
-      )
-    }
-
-    // Only admins can access academic setup
-    if (user.role !== 'SCHOOL_ADMIN') {
+    // Allow teachers and admins to access academic years (needed for assignment creation)
+    if (!['SCHOOL_ADMIN', 'SUPER_ADMIN', 'TEACHER'].includes(user.role)) {
       return NextResponse.json(
         { success: false, message: 'Access denied' },
         { status: 403 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const schoolIdParam = searchParams.get('schoolId')
+
+    // Determine which schoolId to use
+    let targetSchoolId: string | null = null
+
+    if (user.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN can access any school or all schools
+      targetSchoolId = schoolIdParam || null
+    } else if (user.schoolId) {
+      // Regular users can only access their own school
+      targetSchoolId = user.schoolId
+    } else {
+      return NextResponse.json(
+        { success: false, message: 'No institution associated' },
+        { status: 404 }
       )
     }
 
@@ -44,8 +56,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const where: any = {}
+    if (targetSchoolId) {
+      where.schoolId = targetSchoolId
+    }
+
     const academicYears = await prisma.academicYear.findMany({
-      where: { schoolId: user.schoolId },
+      where,
       orderBy: { startDate: 'desc' },
       include: {
         _count: {
@@ -80,28 +97,28 @@ export async function GET(request: NextRequest) {
 // POST - Create a new academic year
 export async function POST(request: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(request)
+    
+    const user = session?.user || jwtUser
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { schoolId: true, role: true },
-    })
-
-    if (!user?.schoolId) {
+    if (!user.schoolId) {
       return NextResponse.json(
         { success: false, message: 'No institution associated' },
         { status: 404 }
       )
     }
 
-    if (user.role !== 'SCHOOL_ADMIN') {
+    // Only admins can create academic years
+    if (!['SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
       return NextResponse.json(
         { success: false, message: 'Access denied' },
         { status: 403 }
@@ -140,7 +157,7 @@ export async function POST(request: NextRequest) {
     const existing = await prisma.academicYear.findUnique({
       where: {
         schoolId_name: {
-          schoolId: user.schoolId,
+          schoolId: user.schoolId!,
           name: name.trim(),
         },
       },
@@ -156,14 +173,14 @@ export async function POST(request: NextRequest) {
     // If setting as current, unset any existing current year
     if (isCurrent) {
       await prisma.academicYear.updateMany({
-        where: { schoolId: user.schoolId, isCurrent: true },
+        where: { schoolId: user.schoolId!, isCurrent: true },
         data: { isCurrent: false },
       })
     }
 
     const academicYear = await prisma.academicYear.create({
       data: {
-        schoolId: user.schoolId,
+        schoolId: user.schoolId!,
         name: name.trim(),
         startDate: start,
         endDate: end,

@@ -45,7 +45,7 @@ interface FeeComponent {
 const FEE_TYPES = [
   { value: 'TUITION', label: 'Tuition Fee' },
   { value: 'ADMISSION', label: 'Admission Fee' },
-  { value: 'EXAM', label: 'Exam Fee' },
+  { value: 'EXAMINATION', label: 'Exam Fee' },
   { value: 'LIBRARY', label: 'Library Fee' },
   { value: 'LABORATORY', label: 'Laboratory Fee' },
   { value: 'SPORTS', label: 'Sports Fee' },
@@ -54,7 +54,7 @@ const FEE_TYPES = [
   { value: 'UNIFORM', label: 'Uniform Fee' },
   { value: 'BOOKS', label: 'Books Fee' },
   { value: 'ACTIVITY', label: 'Activity Fee' },
-  { value: 'DEVELOPMENT', label: 'Development Fee' },
+  { value: 'MISCELLANEOUS', label: 'Miscellaneous Fee' },
   { value: 'OTHER', label: 'Other' },
 ];
 

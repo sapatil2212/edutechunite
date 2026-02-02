@@ -245,14 +245,51 @@ export default function TeacherResourcesPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300">File URL / Link</label>
-                  <Input 
-                    required
-                    placeholder="https://..."
-                    value={newResource.fileUrl}
-                    onChange={(e) => setNewResource({...newResource, fileUrl: e.target.value})}
-                    className="h-11"
-                  />
+                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300">File / Link</label>
+                  {newResource.resourceType === 'LINK' || newResource.resourceType === 'VIDEO' ? (
+                    <Input 
+                      required
+                      placeholder="https://..."
+                      value={newResource.fileUrl}
+                      onChange={(e) => setNewResource({...newResource, fileUrl: e.target.value})}
+                      className="h-11"
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-4">
+                        <Input
+                          type="file"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          id="resource-upload"
+                          disabled={isUploading}
+                        />
+                        <label
+                          htmlFor="resource-upload"
+                          className={`flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer w-full h-11 ${
+                            isUploading ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {isUploading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              {newResource.fileUrl ? 'Change File' : 'Upload File'}
+                            </>
+                          )}
+                        </label>
+                      </div>
+                      {newResource.fileUrl && (
+                        <p className="text-xs text-green-600 truncate">
+                          File uploaded: {newResource.fileUrl.split('/').pop()}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Description</label>

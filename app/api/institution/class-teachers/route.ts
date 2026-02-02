@@ -117,6 +117,8 @@ export async function POST(req: NextRequest) {
     const {
       academicYearId,
       academicUnitId,
+      classId,
+      sectionId,
       teacherId,
       isPrimary = true,
       effectiveFrom,
@@ -125,18 +127,50 @@ export async function POST(req: NextRequest) {
     } = body
 
     // Validate required fields
-    if (!academicYearId || !academicUnitId || !teacherId) {
+    if (!academicYearId || !teacherId) {
       return NextResponse.json(
-        { success: false, message: 'Academic year, class/section, and teacher are required' },
+        { success: false, message: 'Academic year and teacher are required' },
         { status: 400 }
       )
+    }
+
+    // Either academicUnitId or (classId + optional sectionId) must be provided
+    if (!academicUnitId && !classId) {
+      return NextResponse.json(
+        { success: false, message: 'Class selection is required' },
+        { status: 400 }
+      )
+    }
+
+    // Determine the actual academicUnitId to use
+    // If sectionId is provided, use it; otherwise use classId; otherwise use academicUnitId
+    const effectiveAcademicUnitId = sectionId || classId || academicUnitId
+
+    // Fetch class and section names for denormalization
+    let className: string | null = null
+    let sectionName: string | null = null
+
+    if (classId) {
+      const classUnit = await prisma.academicUnit.findUnique({
+        where: { id: classId },
+        select: { name: true }
+      })
+      className = classUnit?.name || null
+    }
+
+    if (sectionId) {
+      const sectionUnit = await prisma.academicUnit.findUnique({
+        where: { id: sectionId },
+        select: { name: true }
+      })
+      sectionName = sectionUnit?.name || null
     }
 
     // Validate the assignment
     const validation = await validateClassTeacherAssignment({
       schoolId: session.user.schoolId,
       academicYearId,
-      academicUnitId,
+      academicUnitId: effectiveAcademicUnitId,
       teacherId,
       isPrimary,
     })
@@ -165,7 +199,7 @@ export async function POST(req: NextRequest) {
     if (!isPrimary) {
       await prisma.classTeacher.updateMany({
         where: {
-          academicUnitId,
+          academicUnitId: effectiveAcademicUnitId,
           academicYearId,
           isPrimary: false,
           isActive: true,
@@ -182,7 +216,11 @@ export async function POST(req: NextRequest) {
       data: {
         schoolId: session.user.schoolId,
         academicYearId,
-        academicUnitId,
+        academicUnitId: effectiveAcademicUnitId,
+        classId: classId || null,
+        sectionId: sectionId || null,
+        className,
+        sectionName,
         teacherId,
         isPrimary,
         effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : new Date(),

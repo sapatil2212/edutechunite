@@ -10,7 +10,10 @@ export async function middleware(request: NextRequest) {
   
   // Define allowed origins
   const allowedOrigins = ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:3001']
-  const isAllowedOrigin = origin && allowedOrigins.includes(origin)
+  
+  // Allow any localhost origin for development to support Flutter web dynamic ports
+  const isLocalhost = origin?.startsWith('http://localhost:') || origin?.startsWith('http://127.0.0.1:')
+  const isAllowedOrigin = origin && (allowedOrigins.includes(origin) || isLocalhost)
 
   // Handle preflight requests
   if (request.method === 'OPTIONS') {
@@ -35,8 +38,11 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-User-Email, X-User-Role, X-User-SchoolId, X-User-StudentId, X-User-GuardianId, X-User-TeacherId')
 
-  // Only handle /api/institution routes (mobile API endpoints)
-  if (request.nextUrl.pathname.startsWith('/api/institution')) {
+  // Handle mobile API endpoints (/api/institution and /api/auth/mobile)
+  const isMobileApiRoute = request.nextUrl.pathname.startsWith('/api/institution') || 
+                           request.nextUrl.pathname.startsWith('/api/auth/mobile')
+  
+  if (isMobileApiRoute) {
     const authHeader = request.headers.get('authorization')
     
     if (authHeader && authHeader.startsWith('Bearer ')) {

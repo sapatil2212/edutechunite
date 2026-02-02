@@ -1,30 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getJWTUser } from '@/lib/jwt'
 import prisma from '@/lib/prisma'
 import { AcademicUnitType } from '@prisma/client'
 
 // GET - List all academic units for the institution
 export async function GET(request: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(request)
+    
+    const user = session?.user || jwtUser
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
-      )
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { schoolId: true, role: true },
-    })
-
-    if (!user?.schoolId) {
-      return NextResponse.json(
-        { success: false, message: 'No institution associated' },
-        { status: 404 }
       )
     }
 
@@ -34,10 +27,29 @@ export async function GET(request: NextRequest) {
     const courseId = searchParams.get('courseId')
     const type = searchParams.get('type') as AcademicUnitType | null
     const includeChildren = searchParams.get('includeChildren') === 'true'
+    const schoolIdParam = searchParams.get('schoolId')
+
+    // Determine which schoolId to use
+    let targetSchoolId: string | null = null
+
+    if (user.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN can access any school or all schools
+      targetSchoolId = schoolIdParam || null
+    } else if (user.schoolId) {
+      // Regular users can only access their own school
+      targetSchoolId = user.schoolId
+    } else {
+      return NextResponse.json(
+        { success: false, message: 'No institution associated' },
+        { status: 404 }
+      )
+    }
 
     // Build where clause
-    const where: Record<string, unknown> = {
-      schoolId: user.schoolId,
+    const where: Record<string, unknown> = {}
+    
+    if (targetSchoolId) {
+      where.schoolId = targetSchoolId
     }
 
     if (academicYearId) {

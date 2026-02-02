@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../widgets/modern_stat_card.dart';
@@ -43,6 +42,65 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
     _fetchDashboardData();
   }
 
+  Widget _buildSubjectsSection() {
+    final subjects = _dashboardData?['subjects'] as List? ?? [];
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'My Subjects',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (subjects.isEmpty)
+            Text(
+              'No subjects assigned',
+              style: TextStyle(color: Colors.grey[600]),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: subjects.map((s) {
+                final name = s['name'] ?? s['subject']?['name'] ?? 'Subject';
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+ 
   @override
   void dispose() {
     _animationController.dispose();
@@ -56,11 +114,15 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
       final authService = Provider.of<AuthService>(context, listen: false);
       final studentId = authService.user?.studentId;
 
+      final profile = await apiService.getProfile();
+      final academicUnitId = profile['academicUnit']?['id'] ?? profile['classId'];
+
       final results = await Future.wait([
         apiService.getAttendance(studentId: studentId),
         apiService.getHomework(upcoming: true),
         apiService.getExams(upcoming: true),
         apiService.getTimetable(),
+        apiService.getSubjects(academicUnitId: academicUnitId),
       ]);
 
       if (mounted) {
@@ -70,6 +132,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
             'homework': results[1]['homeworks'],
             'exams': results[2]['exams'],
             'timetable': results[3]['todaySchedule'],
+            'subjects': results[4]['data'] ?? [],
           };
           _isLoading = false;
         });
@@ -93,6 +156,13 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
               {'subject': 'Mathematics', 'time': '08:00 - 09:00', 'room': '101'},
               {'subject': 'Physics', 'time': '09:00 - 10:00', 'room': 'Lab 1'},
               {'subject': 'English', 'time': '10:30 - 11:30', 'room': '102'},
+            ],
+            'subjects': [
+              {'name': 'Mathematics'},
+              {'name': 'English'},
+              {'name': 'Science'},
+              {'name': 'EVS'},
+              {'name': 'Hindi'},
             ],
           };
           _isLoading = false;
@@ -177,6 +247,8 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                 ),
                                 const SizedBox(height: 16),
                                 _buildStatsGrid(context),
+                                const SizedBox(height: 32),
+                                _buildSubjectsSection(),
                                 const SizedBox(height: 32),
                                 _buildScheduleSection(),
                                 const SizedBox(height: 32),

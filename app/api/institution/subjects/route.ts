@@ -1,38 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getJWTUser } from '@/lib/jwt'
 import prisma from '@/lib/prisma'
 
 // GET - List all subjects for the institution
 export async function GET(request: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(request)
+    
+    const user = session?.user || jwtUser
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { schoolId: true, role: true },
-    })
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type')
+    const activeOnly = searchParams.get('activeOnly') !== 'false'
+    const schoolIdParam = searchParams.get('schoolId')
 
-    if (!user?.schoolId) {
+    // Determine which schoolId to use
+    let targetSchoolId: string | null = null
+
+    if (user.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN can access any school or all schools
+      targetSchoolId = schoolIdParam || null
+    } else if (user.schoolId) {
+      // Regular users can only access their own school
+      targetSchoolId = user.schoolId
+    } else {
       return NextResponse.json(
         { success: false, message: 'No institution associated' },
         { status: 404 }
       )
     }
 
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type')
-    const activeOnly = searchParams.get('activeOnly') !== 'false'
-
-    const where: Record<string, unknown> = {
-      schoolId: user.schoolId,
+    const where: Record<string, unknown> = {}
+    
+    if (targetSchoolId) {
+      where.schoolId = targetSchoolId
     }
 
     if (type) {
@@ -69,28 +81,28 @@ export async function GET(request: NextRequest) {
 // POST - Create a new subject
 export async function POST(request: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(request)
+    
+    const user = session?.user || jwtUser
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { schoolId: true, role: true },
-    })
-
-    if (!user?.schoolId) {
+    if (!user.schoolId) {
       return NextResponse.json(
         { success: false, message: 'No institution associated' },
         { status: 404 }
       )
     }
 
-    if (user.role !== 'SCHOOL_ADMIN') {
+    // Only admins can create subjects
+    if (!['SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
       return NextResponse.json(
         { success: false, message: 'Access denied' },
         { status: 403 }
@@ -129,7 +141,7 @@ export async function POST(request: NextRequest) {
     const existing = await prisma.subject.findUnique({
       where: {
         schoolId_code: {
-          schoolId: user.schoolId,
+          schoolId: user.schoolId!,
           code: code.trim().toUpperCase(),
         },
       },
@@ -144,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     const subject = await prisma.subject.create({
       data: {
-        schoolId: user.schoolId,
+        schoolId: user.schoolId!,
         name: name.trim(),
         code: code.trim().toUpperCase(),
         description: description?.trim() || null,

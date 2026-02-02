@@ -18,6 +18,14 @@ import {
   Check,
   Search,
   Filter,
+  Eye,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  Calendar,
+  Mail,
+  Phone,
+  GraduationCap,
 } from 'lucide-react'
 
 interface Teacher {
@@ -53,6 +61,12 @@ interface ClassTeacher {
   id: string
   isPrimary: boolean
   isActive: boolean
+  classId?: string | null
+  sectionId?: string | null
+  className?: string | null
+  sectionName?: string | null
+  effectiveFrom?: string
+  notes?: string | null
   teacher: Teacher
   academicUnit: AcademicUnit
   academicYear: AcademicYear
@@ -160,9 +174,21 @@ export default function TeacherAssignmentsPage() {
 
   // Form states
   const [classTeacherForm, setClassTeacherForm] = useState({
-    academicUnitId: '',
+    classId: '',
+    sectionId: '',
     teacherId: '',
     isPrimary: true,
+    notes: '',
+  })
+
+  // View/Edit modal states
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedAssignment, setSelectedAssignment] = useState<ClassTeacher | TeacherAssignment | null>(null)
+  const [editForm, setEditForm] = useState({
+    teacherId: '',
+    isPrimary: true,
+    notes: '',
   })
 
   const [subjectTeacherForm, setSubjectTeacherForm] = useState({
@@ -258,7 +284,7 @@ export default function TeacherAssignmentsPage() {
 
       if (data.success) {
         setShowClassTeacherModal(false)
-        setClassTeacherForm({ academicUnitId: '', teacherId: '', isPrimary: true })
+        setClassTeacherForm({ classId: '', sectionId: '', teacherId: '', isPrimary: true, notes: '' })
         setFormWarnings([])
         fetchAssignments()
       } else {
@@ -326,6 +352,56 @@ export default function TeacherAssignmentsPage() {
       }
     } catch (error) {
       console.error('Failed to remove assignment:', error)
+    }
+  }
+
+  const handleViewAssignment = (assignment: ClassTeacher | TeacherAssignment) => {
+    setSelectedAssignment(assignment)
+    setShowViewModal(true)
+  }
+
+  const handleEditAssignment = (assignment: ClassTeacher | TeacherAssignment) => {
+    setSelectedAssignment(assignment)
+    setEditForm({
+      teacherId: assignment.teacher.id,
+      isPrimary: assignment.isPrimary,
+      notes: 'notes' in assignment ? (assignment.notes || '') : '',
+    })
+    setShowEditModal(true)
+  }
+
+  const handleUpdateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAssignment) return
+    
+    setIsSubmitting(true)
+    setFormError('')
+
+    try {
+      const isClassTeacher = 'className' in selectedAssignment || !('subject' in selectedAssignment)
+      const endpoint = isClassTeacher
+        ? `/api/institution/class-teachers/${selectedAssignment.id}`
+        : `/api/institution/teacher-assignments/${selectedAssignment.id}`
+
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setShowEditModal(false)
+        setSelectedAssignment(null)
+        fetchAssignments()
+      } else {
+        setFormError(data.message)
+      }
+    } catch (error) {
+      setFormError('Failed to update assignment')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -454,44 +530,107 @@ export default function TeacherAssignmentsPage() {
                   <CardContent className="py-12 text-center">
                     <UserCheck className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                     <p className="text-gray-500 dark:text-gray-400">No class teachers assigned yet</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                      Click &quot;Assign Class Teacher&quot; to add your first assignment
+                    </p>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-4">
-                  {filteredClassTeachers.map((ct) => (
-                    <Card key={ct.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
-                              <Users className="w-6 h-6 text-primary" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-gray-900 dark:text-white">
-                                  {ct.academicUnit.name}
-                                </h3>
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-50 dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700">
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Class / Section
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Teacher
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Role
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Status
+                            </th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-dark-700">
+                          {filteredClassTeachers.map((ct) => (
+                            <tr key={ct.id} className="bg-white dark:bg-dark-900 hover:bg-gray-50 dark:hover:bg-dark-800 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                    <GraduationCap className="w-5 h-5 text-primary" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-gray-900 dark:text-white">
+                                      {ct.className || ct.academicUnit.parent?.name || ct.academicUnit.name}
+                                    </p>
+                                    {(ct.sectionName || ct.academicUnit.parent) && (
+                                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        {ct.sectionName || ct.academicUnit.name}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {ct.teacher.fullName}
+                                  </p>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {ct.teacher.employeeId}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
                                 <Badge variant={ct.isPrimary ? 'primary' : 'secondary'}>
                                   {ct.isPrimary ? 'Primary' : 'Co-Teacher'}
                                 </Badge>
-                              </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {ct.teacher.fullName} ({ct.teacher.employeeId})
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveAssignment(ct.id, 'class-teacher')}
-                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                            title="Remove assignment"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge variant={ct.isActive ? 'success' : 'secondary'}>
+                                  {ct.isActive ? 'Active' : 'Inactive'}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleViewAssignment(ct)}
+                                    className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                    title="View details"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditAssignment(ct)}
+                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                    title="Edit assignment"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveAssignment(ct.id, 'class-teacher')}
+                                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    title="Remove assignment"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
           ) : (
@@ -514,78 +653,128 @@ export default function TeacherAssignmentsPage() {
                   <CardContent className="py-12 text-center">
                     <BookOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                     <p className="text-gray-500 dark:text-gray-400">No subject teachers assigned yet</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                      Click &quot;Assign Subject Teacher&quot; to add your first assignment
+                    </p>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gray-50 dark:bg-dark-800">
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Class
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Subject
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Teacher
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Type
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Periods/Week
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-dark-700">
-                      {filteredSubjectAssignments.map((sa) => (
-                        <tr key={sa.id} className="bg-white dark:bg-dark-900">
-                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                            {sa.academicUnit.name}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              {sa.subject.color && (
-                                <span 
-                                  className="w-3 h-3 rounded-full" 
-                                  style={{ backgroundColor: sa.subject.color }}
-                                />
-                              )}
-                              <span className="text-sm text-gray-900 dark:text-white">
-                                {sa.subject.name}
-                              </span>
-                              <span className="text-xs text-gray-500">({sa.subject.code})</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                            {sa.teacher.fullName}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant="secondary">
-                              {getAssignmentTypeLabel(sa.assignmentType)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                            {sa.periodsPerWeek || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleRemoveAssignment(sa.id, 'subject-teacher')}
-                              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                              title="Remove assignment"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-50 dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700">
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Class / Section
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Subject
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Teacher
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Type
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Periods/Week
+                            </th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-dark-700">
+                          {filteredSubjectAssignments.map((sa) => (
+                            <tr key={sa.id} className="bg-white dark:bg-dark-900 hover:bg-gray-50 dark:hover:bg-dark-800 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                    <GraduationCap className="w-5 h-5 text-primary" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-gray-900 dark:text-white">
+                                      {sa.academicUnit.parent?.name || sa.academicUnit.name}
+                                    </p>
+                                    {sa.academicUnit.parent && (
+                                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        {sa.academicUnit.name}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  {sa.subject.color && (
+                                    <span 
+                                      className="w-3 h-3 rounded-full flex-shrink-0" 
+                                      style={{ backgroundColor: sa.subject.color }}
+                                    />
+                                  )}
+                                  <div>
+                                    <p className="font-medium text-gray-900 dark:text-white">
+                                      {sa.subject.name}
+                                    </p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                      {sa.subject.code}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {sa.teacher.fullName}
+                                  </p>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {sa.teacher.employeeId}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge variant="secondary">
+                                  {getAssignmentTypeLabel(sa.assignmentType)}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {sa.periodsPerWeek || '-'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleViewAssignment(sa)}
+                                    className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                    title="View details"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditAssignment(sa)}
+                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                    title="Edit assignment"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveAssignment(sa.id, 'subject-teacher')}
+                                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    title="Remove assignment"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
           )}
@@ -665,13 +854,43 @@ export default function TeacherAssignmentsPage() {
               </div>
 
               <SearchableDropdown
-                label="Class / Section"
+                label="Select Class"
                 required
                 placeholder="Search and select class..."
                 searchPlaceholder="Search classes..."
-                value={classTeacherForm.academicUnitId}
-                onChange={(value) => setClassTeacherForm({ ...classTeacherForm, academicUnitId: value })}
-                options={getSortedAcademicUnits(academicUnits)}
+                value={classTeacherForm.classId}
+                onChange={(value) => {
+                  setClassTeacherForm({ ...classTeacherForm, classId: value, sectionId: '' })
+                }}
+                options={academicUnits
+                  .filter(u => !u.parent)
+                  .sort((a, b) => {
+                    const numA = parseInt(a.name.replace(/\D/g, '')) || 0
+                    const numB = parseInt(b.name.replace(/\D/g, '')) || 0
+                    return numA !== numB ? numA - numB : a.name.localeCompare(b.name)
+                  })
+                  .map((unit): DropdownOption => ({
+                    value: unit.id,
+                    label: unit.name,
+                    description: unit.type,
+                  }))}
+              />
+
+              <SearchableDropdown
+                label="Select Section"
+                placeholder="Select section (optional)..."
+                searchPlaceholder="Search sections..."
+                value={classTeacherForm.sectionId}
+                onChange={(value) => setClassTeacherForm({ ...classTeacherForm, sectionId: value })}
+                options={academicUnits
+                  .filter(u => u.parent?.id === classTeacherForm.classId)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((unit): DropdownOption => ({
+                    value: unit.id,
+                    label: unit.name,
+                    description: unit.type,
+                  }))}
+                disabled={!classTeacherForm.classId}
               />
 
               <SearchableDropdown
@@ -688,7 +907,7 @@ export default function TeacherAssignmentsPage() {
                 }))}
               />
 
-              <div>
+              <div className="space-y-3">
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -700,6 +919,19 @@ export default function TeacherAssignmentsPage() {
                     Primary Class Teacher
                   </span>
                 </label>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={classTeacherForm.notes}
+                    onChange={(e) => setClassTeacherForm({ ...classTeacherForm, notes: e.target.value })}
+                    placeholder="Add any notes about this assignment..."
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-lg resize-none"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">
@@ -879,6 +1111,215 @@ export default function TeacherAssignmentsPage() {
                   className="px-4 py-2 bg-primary text-dark-900 rounded-lg hover:bg-primary/90 font-medium text-sm disabled:opacity-50"
                 >
                   {isSubmitting ? 'Assigning...' : 'Assign Subject Teacher'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Assignment Modal */}
+      {showViewModal && selectedAssignment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-dark-900 rounded-xl w-full max-w-lg mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Assignment Details
+              </h2>
+              <button
+                onClick={() => { setShowViewModal(false); setSelectedAssignment(null); }}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Class/Section Info */}
+              <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <GraduationCap className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Class / Section</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    {'className' in selectedAssignment && selectedAssignment.className 
+                      ? `${selectedAssignment.className}${selectedAssignment.sectionName ? ` - ${selectedAssignment.sectionName}` : ''}`
+                      : selectedAssignment.academicUnit.parent 
+                        ? `${selectedAssignment.academicUnit.parent.name} - ${selectedAssignment.academicUnit.name}`
+                        : selectedAssignment.academicUnit.name
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* Teacher Info */}
+              <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Teacher</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    {selectedAssignment.teacher.fullName}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    ID: {selectedAssignment.teacher.employeeId}
+                  </p>
+                  {selectedAssignment.teacher.email && (
+                    <div className="flex items-center gap-1 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      <Mail className="w-3 h-3" />
+                      {selectedAssignment.teacher.email}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Role & Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Role</p>
+                  <Badge variant={selectedAssignment.isPrimary ? 'primary' : 'secondary'}>
+                    {selectedAssignment.isPrimary ? 'Primary Teacher' : 'Co-Teacher'}
+                  </Badge>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Status</p>
+                  <Badge variant={selectedAssignment.isActive ? 'success' : 'secondary'}>
+                    {selectedAssignment.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {'notes' in selectedAssignment && selectedAssignment.notes && (
+                <div className="p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Notes</p>
+                  <p className="text-gray-900 dark:text-white">{selectedAssignment.notes}</p>
+                </div>
+              )}
+
+              {/* Effective From */}
+              {'effectiveFrom' in selectedAssignment && selectedAssignment.effectiveFrom && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <Calendar className="w-4 h-4" />
+                  Effective from: {new Date(selectedAssignment.effectiveFrom).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-dark-700">
+              <button
+                onClick={() => { setShowViewModal(false); setSelectedAssignment(null); }}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setShowViewModal(false)
+                  handleEditAssignment(selectedAssignment)
+                }}
+                className="px-4 py-2 bg-primary text-dark-900 rounded-lg hover:bg-primary/90 font-medium text-sm"
+              >
+                Edit Assignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Assignment Modal */}
+      {showEditModal && selectedAssignment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-dark-900 rounded-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Edit Assignment
+              </h2>
+              <button
+                onClick={() => { setShowEditModal(false); setSelectedAssignment(null); setFormError(''); }}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Current Assignment Info */}
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Editing assignment for</p>
+              <p className="font-semibold text-gray-900 dark:text-white">
+                {'className' in selectedAssignment && selectedAssignment.className 
+                  ? `${selectedAssignment.className}${selectedAssignment.sectionName ? ` - ${selectedAssignment.sectionName}` : ''}`
+                  : selectedAssignment.academicUnit.parent 
+                    ? `${selectedAssignment.academicUnit.parent.name} - ${selectedAssignment.academicUnit.name}`
+                    : selectedAssignment.academicUnit.name
+                }
+              </p>
+            </div>
+
+            {formError && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateAssignment} className="space-y-4">
+              <SearchableDropdown
+                label="Teacher"
+                required
+                placeholder="Search and select teacher..."
+                searchPlaceholder="Search by name or ID..."
+                value={editForm.teacherId}
+                onChange={(value) => setEditForm({ ...editForm, teacherId: value })}
+                options={teachers.map((teacher): DropdownOption => ({
+                  value: teacher.id,
+                  label: teacher.fullName,
+                  description: `${teacher.employeeId}${teacher.specialization ? ` • ${teacher.specialization}` : ''}`,
+                }))}
+              />
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={editForm.isPrimary}
+                    onChange={(e) => setEditForm({ ...editForm, isPrimary: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Primary Class Teacher
+                  </span>
+                </label>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    placeholder="Add any notes about this assignment..."
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-lg resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-dark-700">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditModal(false); setSelectedAssignment(null); setFormError(''); }}
+                  className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-primary text-dark-900 rounded-lg hover:bg-primary/90 font-medium text-sm disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

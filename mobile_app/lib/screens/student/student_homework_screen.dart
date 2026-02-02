@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_drawer.dart';
+import 'student_assignment_detail_screen.dart';
 
 class StudentHomeworkScreen extends StatefulWidget {
   const StudentHomeworkScreen({super.key});
@@ -35,9 +36,9 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen> with Sing
     setState(() => _isLoading = true);
     try {
       final apiService = Provider.of<ApiService>(context, listen: false);
-      final data = await apiService.getHomework(upcoming: true);
+      final data = await apiService.getAssignments();
 
-      final homeworks = (data['homeworks'] as List? ?? []);
+      final homeworks = (data['assignments'] as List? ?? []);
       setState(() {
         _allHomework = homeworks;
         _pendingHomework = homeworks.where((h) {
@@ -46,12 +47,12 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen> with Sing
         }).toList();
         _completedHomework = homeworks.where((h) {
           final submission = h['submission'];
-          return submission != null && submission['status'] == 'SUBMITTED';
+          return submission != null && ['SUBMITTED', 'LATE_SUBMITTED', 'LATE', 'EVALUATED'].contains(submission['status']);
         }).toList();
         _isLoading = false;
       });
     } catch (e) {
-      print('Error fetching homework: $e');
+      print('Error fetching assignments: $e');
       // Mock data for preview
       if (mounted) {
         setState(() {
@@ -168,7 +169,14 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen> with Sing
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
               onTap: () {
-                // Navigate to details
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StudentAssignmentDetailScreen(
+                      assignmentId: homework['id'],
+                    ),
+                  ),
+                ).then((_) => _fetchHomework()); // Refresh on return
               },
               child: Padding(
                 padding: const EdgeInsets.all(20),

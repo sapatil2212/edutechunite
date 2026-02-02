@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getJWTUser } from '@/lib/jwt'
 import { v2 as cloudinary } from 'cloudinary'
 
 // Configure Cloudinary
@@ -12,9 +13,13 @@ cloudinary.config({
 
 export async function POST(req: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(req)
     
-    if (!session?.user?.schoolId) {
+    const user = session?.user || jwtUser
+    
+    if (!user?.schoolId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -27,16 +32,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+    const validTypes = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/jpg',
+      'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain', 'application/zip'
+    ]
     if (!validTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' },
+        { error: 'Invalid file type. Allowed: Images, PDF, Word, Excel, Text, Zip' },
         { status: 400 }
       )
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = parseInt(process.env.MAX_FILE_SIZE || '5242880')
+    // Validate file size (max 10MB)
+    const maxSize = parseInt(process.env.MAX_FILE_SIZE || '10485760')
     if (file.size > maxSize) {
       return NextResponse.json(
         { error: `File too large. Maximum size is ${maxSize / 1024 / 1024}MB.` },
@@ -51,13 +63,13 @@ export async function POST(req: NextRequest) {
 
     // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(base64, {
-      folder: `edugrow/${session.user.schoolId}/${folder}`,
-      resource_type: 'image',
-      transformation: [
-        { width: 500, height: 500, crop: 'limit' },
-        { quality: 'auto' },
-        { fetch_format: 'auto' },
-      ],
+      folder: `edugrow/${user.schoolId}/${folder}`,
+      resource_type: 'auto',
+      // transformation: [
+      //   { width: 500, height: 500, crop: 'limit' },
+      //   { quality: 'auto' },
+      //   { fetch_format: 'auto' },
+      // ],
     })
 
     return NextResponse.json({
@@ -77,9 +89,13 @@ export async function POST(req: NextRequest) {
 // DELETE: Remove an uploaded file
 export async function DELETE(req: NextRequest) {
   try {
+    // Try NextAuth session first, then JWT
     const session = await getServerSession(authOptions)
+    const jwtUser = await getJWTUser(req)
     
-    if (!session?.user?.schoolId) {
+    const user = session?.user || jwtUser
+    
+    if (!user?.schoolId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -91,7 +107,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Ensure user can only delete files from their school
-    if (!publicId.includes(session.user.schoolId)) {
+    if (!publicId.includes(user.schoolId!)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

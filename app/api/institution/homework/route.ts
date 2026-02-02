@@ -41,7 +41,19 @@ export async function GET(req: NextRequest) {
       if (!student) {
         return NextResponse.json({ error: 'Student profile not found' }, { status: 404 })
       }
-      where.academicUnitId = student.academicUnitId
+
+      // Get the student's unit (Section) and its parent (Class)
+      const studentUnit = await prisma.academicUnit.findUnique({
+        where: { id: student.academicUnitId },
+        select: { id: true, parentId: true },
+      })
+
+      const unitIds = [student.academicUnitId]
+      if (studentUnit?.parentId) {
+        unitIds.push(studentUnit.parentId)
+      }
+
+      where.academicUnitId = { in: unitIds }
       where.academicYearId = student.academicYearId
     } else if (user.role === 'PARENT') {
       // Get linked students' classes

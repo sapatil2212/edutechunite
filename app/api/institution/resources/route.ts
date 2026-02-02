@@ -33,14 +33,26 @@ export async function GET(req: NextRequest) {
     if (session.user.role === 'STUDENT') {
       const student = await prisma.student.findUnique({
         where: { userId: session.user.id },
-        select: { academicUnitId: true, academicYearId: true },
+        select: { 
+          academicUnitId: true, 
+          academicYearId: true,
+          academicUnit: {
+            select: { parentId: true }
+          }
+        },
       })
       if (!student) {
         return NextResponse.json({ error: 'Student profile not found' }, { status: 404 })
       }
+      
+      const allowedUnitIds = [student.academicUnitId]
+      if (student.academicUnit.parentId) {
+        allowedUnitIds.push(student.academicUnit.parentId)
+      }
+
       where.OR = [
         { isPublic: true },
-        { academicUnitId: student.academicUnitId },
+        { academicUnitId: { in: allowedUnitIds } },
       ]
     } else if (session.user.role === 'PARENT') {
       // Get linked students' classes

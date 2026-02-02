@@ -5,6 +5,17 @@ import { SignJWT } from 'jose'
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'your-fallback-secret'
 
+// CORS headers for mobile app
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { identifier, password } = await req.json()
@@ -12,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!identifier || !password) {
       return NextResponse.json(
         { success: false, message: 'Please enter your credentials' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -34,21 +45,21 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json(
         { success: false, message: 'No account found with these credentials' },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       )
     }
 
     if (!user.emailVerified) {
       return NextResponse.json(
         { success: false, message: 'Please verify your email before logging in' },
-        { status: 403 }
+        { status: 403, headers: corsHeaders }
       )
     }
 
     if (user.status !== 'ACTIVE') {
       return NextResponse.json(
         { success: false, message: `Your account is ${user.status.toLowerCase()}. Please contact support.` },
-        { status: 403 }
+        { status: 403, headers: corsHeaders }
       )
     }
 
@@ -57,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (!isPasswordValid) {
       return NextResponse.json(
         { success: false, message: 'Invalid password' },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       )
     }
 
@@ -91,13 +102,13 @@ export async function POST(req: NextRequest) {
         guardianId: user.guardianProfile?.id,
         teacherId: user.teacherProfile?.id,
       }
-    })
+    }, { headers: corsHeaders })
 
   } catch (error) {
     console.error('Mobile login error:', error)
     return NextResponse.json(
       { success: false, message: 'An error occurred during login' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     )
   }
 }

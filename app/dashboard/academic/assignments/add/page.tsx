@@ -501,29 +501,35 @@ export default function AddAssignmentPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex gap-2">
-                    <label className="flex-1">
+                  <div className="border-2 border-dashed border-gray-200 dark:border-dark-700 rounded-xl p-8 transition-colors hover:border-primary/50 bg-gray-50/50 dark:bg-dark-900/50">
+                    <label className="flex flex-col items-center justify-center cursor-pointer">
                       <input
                         type="file"
                         multiple
                         onChange={handleFileUpload}
                         className="hidden"
-                        accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+                        accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.zip"
                       />
-                      <div className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-200 dark:border-dark-700 rounded-lg cursor-pointer hover:border-primary transition-colors">
+                      <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                         {isUploading ? (
-                          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                         ) : (
-                          <Upload className="w-5 h-5 text-gray-400" />
+                          <Upload className="w-8 h-8 text-blue-500" />
                         )}
-                        <span className="text-sm text-gray-500">
-                          {isUploading ? 'Uploading...' : 'Upload Files'}
-                        </span>
                       </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                        {isUploading ? 'Uploading Files...' : 'Click to Upload or Drag & Drop'}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs">
+                        Support for PDF, Word, Excel, Images and ZIP files. Max size 10MB.
+                      </p>
                     </label>
-                    <Button type="button" variant="outline" onClick={addLinkAttachment}>
-                      <LinkIcon className="w-4 h-4" />
-                      Add Link
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Button type="button" variant="outline" size="sm" onClick={addLinkAttachment}>
+                      <LinkIcon className="w-4 h-4 mr-2" />
+                      Add External Link
                     </Button>
                   </div>
 

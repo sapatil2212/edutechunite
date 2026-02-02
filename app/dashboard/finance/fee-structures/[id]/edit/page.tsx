@@ -38,7 +38,7 @@ interface FeeComponent {
 const FEE_TYPES = [
   { value: 'TUITION', label: 'Tuition Fee' },
   { value: 'ADMISSION', label: 'Admission Fee' },
-  { value: 'EXAM', label: 'Exam Fee' },
+  { value: 'EXAMINATION', label: 'Exam Fee' },
   { value: 'LIBRARY', label: 'Library Fee' },
   { value: 'LABORATORY', label: 'Laboratory Fee' },
   { value: 'SPORTS', label: 'Sports Fee' },

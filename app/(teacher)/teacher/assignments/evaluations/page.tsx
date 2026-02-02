@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { StatCard } from '@/components/dashboard/stat-card'
+import { SuccessModal } from '@/components/ui/success-modal'
 import { 
   ClipboardList, 
   Search, 
@@ -44,6 +45,10 @@ export default function TeacherEvaluationsPage() {
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+
+  // Success Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   // Evaluation Form State
   const [evaluationForm, setEvaluationForm] = useState({
@@ -133,14 +138,14 @@ export default function TeacherEvaluationsPage() {
 
       const data = await res.json()
       if (res.ok) {
-        alert(data.message || 'Evaluation saved')
+        setSuccessMessage(data.message || 'Evaluation saved successfully')
+        setShowSuccessModal(true)
         // Update local state
         setSubmissions(prev => prev.map(s => 
           s.id === selectedSubmission.id 
             ? { ...s, status: evaluationForm.status === 'RETURNED' ? 'RETURNED' : 'EVALUATED', evaluation: data.evaluation } 
             : s
         ))
-        setView('submissions')
       } else {
         alert(data.error || 'Failed to save evaluation')
       }
@@ -418,7 +423,7 @@ export default function TeacherEvaluationsPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="text-sm font-bold text-gray-900 dark:text-white">
-                                {submission.evaluation?.marksObtained !== null ? (
+                                {submission.evaluation && submission.evaluation.marksObtained !== null ? (
                                   `${submission.evaluation.marksObtained} / ${selectedAssignment?.maxMarks || '-'}`
                                 ) : (
                                   <span className="text-gray-400">Not Graded</span>
@@ -649,6 +654,14 @@ export default function TeacherEvaluationsPage() {
           )}
         </>
       )}
+      <SuccessModal 
+        isOpen={showSuccessModal}
+        onClose={() => {
+          setShowSuccessModal(false)
+          setView('submissions')
+        }}
+        message={successMessage}
+      />
     </div>
   )
 }

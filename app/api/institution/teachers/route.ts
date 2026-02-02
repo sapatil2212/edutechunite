@@ -24,19 +24,32 @@ export async function GET(request: NextRequest) {
       select: { schoolId: true, role: true },
     })
 
-    if (!user?.schoolId) {
+    const { searchParams } = new URL(request.url)
+    const activeOnly = searchParams.get('activeOnly') !== 'false'
+    const subjectId = searchParams.get('subjectId')
+    const schoolIdParam = searchParams.get('schoolId')
+
+    // Determine which schoolId to use
+    let targetSchoolId: string | null = null
+
+    if (user?.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN can access any school or all schools
+      targetSchoolId = schoolIdParam || null
+    } else if (user?.schoolId) {
+      // Regular users can only access their own school
+      targetSchoolId = user.schoolId
+    } else {
       return NextResponse.json(
         { success: false, message: 'No institution associated' },
         { status: 404 }
       )
     }
 
-    const { searchParams } = new URL(request.url)
-    const activeOnly = searchParams.get('activeOnly') !== 'false'
-    const subjectId = searchParams.get('subjectId')
-
-    const where: any = {
-      schoolId: user.schoolId,
+    const where: any = {}
+    
+    // Only filter by schoolId if we have one (SUPER_ADMIN without schoolIdParam gets all)
+    if (targetSchoolId) {
+      where.schoolId = targetSchoolId
     }
 
     if (activeOnly) {
@@ -323,19 +336,21 @@ export async function POST(request: NextRequest) {
     // Send notifications to all admins
     const uniqueAdmins = Array.from(new Set(adminRecipients.filter(Boolean)))
     
-    uniqueAdmins.forEach(adminEmail => {
-      sendEmail({
-        to: adminEmail,
-        subject: `New Teacher Registered at ${school.name}: ${fullName.trim()}`,
-        html: getTeacherRegistrationNotificationTemplate(
-          'Administrator',
-          fullName.trim(),
-          email?.trim() || 'Not provided',
-          school.name,
-          enableLogin
-        ),
-      }).catch(err => console.error(`Failed to send admin notification to ${adminEmail}:`, err))
-    })
+    if (school) {
+      uniqueAdmins.forEach(adminEmail => {
+        sendEmail({
+          to: adminEmail,
+          subject: `New Teacher Registered at ${school.name}: ${fullName.trim()}`,
+          html: getTeacherRegistrationNotificationTemplate(
+            'Administrator',
+            fullName.trim(),
+            email?.trim() || 'Not provided',
+            school.name,
+            enableLogin
+          ),
+        }).catch(err => console.error(`Failed to send admin notification to ${adminEmail}:`, err))
+      })
+    }
 
     return NextResponse.json({
       success: true,

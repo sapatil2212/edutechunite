@@ -139,6 +139,25 @@ model School {
   classTeachers            ClassTeacher[]
   teacherClassAssignments  TeacherClassAssignment[]
   
+  // Exam Management Module Relations
+  examAttendance      ExamAttendance[]
+  examSummaries       StudentExamSummary[]
+  examNotifications   ExamNotification[]
+  hallTickets         ExamHallTicket[]
+  questionPapers      ExamQuestionPaper[]
+  answerSheets        ExamAnswerSheet[]
+  gradingSchemes      GradingScheme[]
+  
+  // New Exam Timetable System Relations
+  examTimetables      ExamTimetable[]     @relation("SchoolExamTimetables")
+  auditLogs           AuditLog[]          @relation("SchoolAuditLogs")
+  signatures          InstitutionSignature[] @relation("SchoolSignatures")
+  reportCards         ReportCard[]        @relation("SchoolReportCards")
+  performanceComparisons ExamPerformanceComparison[]
+  seatingArrangements ExamSeatingArrangement[]
+  invigilatorDuties   InvigilatorDuty[]
+  examInsights        ExamInsight[]
+  
   // Attendance Configuration
   attendanceConfig         AttendanceConfig?
   
@@ -195,6 +214,18 @@ model User {
   notifications     Notification[]
   loginLogs         LoginLog[]
   passwordResets    PasswordResetOTP[]
+  notificationPreferences NotificationPreference?
+  
+  // Exam Timetable System Relations
+  createdTimetables  ExamTimetable[]  @relation("TimetableCreator")
+  publishedTimetables ExamTimetable[] @relation("TimetablePublisher")
+  timetableNotifications ExamTimetableNotification[] @relation("ExamTimetableNotificationRecipient")
+  markedSlotAttendance ExamSlotAttendance[] @relation("AttendanceMarker")
+  marksChangeRequests MarksChangeRequest[] @relation("MarksChangeRequester")
+  approvedMarksChanges MarksChangeRequest[] @relation("MarksChangeApprover")
+  auditLogs          AuditLog[]       @relation("AuditLogUser")
+  uploadedSignatures InstitutionSignature[] @relation("SignatureUploader")
+  generatedReportCards ReportCard[]   @relation("ReportCardGenerator")
   
   @@index([role])
   @@index([status])
@@ -330,6 +361,10 @@ model AcademicYear {
   classTeachers            ClassTeacher[]
   teacherClassAssignments  TeacherClassAssignment[]
   
+  // Exam Timetable System Relations
+  examTimetables     ExamTimetable[]  @relation("AcademicYearTimetables")
+  reportCards        ReportCard[]     @relation("AcademicYearReportCards")
+  
   @@unique([schoolId, name])
   @@index([schoolId, isActive])
   @@index([schoolId, isCurrent])
@@ -395,6 +430,9 @@ model AcademicUnit {
   // Subject Relations
   academicUnitSubjects     AcademicUnitSubject[]
   
+  // Exam Timetable System Relations
+  examTimetables     ExamTimetable[]  @relation("AcademicUnitTimetables")
+  
   @@unique([schoolId, academicYearId, parentId, name])
   @@index([schoolId, academicYearId])
   @@index([schoolId, type])
@@ -446,10 +484,16 @@ model Teacher {
   homeworks              Homework[]
   assignments            Assignment[]
   evaluations            AssignmentEvaluation[]
+  examSummaries          StudentExamSummary[]
+  invigilatorDuties      InvigilatorDuty[]
   
   // Teacher Assignment Module Relations
   classTeacherAssignments   ClassTeacher[]
   teacherClassAssignments   TeacherClassAssignment[]
+  
+  // Exam Timetable System Relations
+  supervisedSlots    ExamTimetableSlot[] @relation("SlotSupervisor")
+  signatures         InstitutionSignature[] @relation("TeacherSignatures")
   
   // Workload tracking (calculated field)
   currentPeriodsPerWeek  Int             @default(0)
@@ -532,12 +576,17 @@ model Subject {
   examResults        ExamResult[]
   resources          Resource[]
   assignments        Assignment[]
+  examSummaries      StudentExamSummary[]
+  performanceComparisons ExamPerformanceComparison[]
   
   // Teacher Assignment Module Relations
   teacherClassAssignments  TeacherClassAssignment[]
   
   // Academic Unit Subject Relations
   academicUnitSubjects     AcademicUnitSubject[]
+  
+  // Exam Timetable System Relations
+  examTimetableSlots     ExamTimetableSlot[] @relation("SlotSubject")
   
   @@unique([schoolId, code])
   @@index([schoolId, isActive])
@@ -861,6 +910,12 @@ model Student {
   academicUnitId    String          // Current class/section/batch
   academicUnit      AcademicUnit    @relation(fields: [academicUnitId], references: [id], onDelete: Cascade)
   
+  // Denormalized class and section for easier queries and display
+  classId           String?         // Parent academic unit (class)
+  className         String?         @db.VarChar(100)  // e.g., "Nursery", "Class 1"
+  sectionId         String?         // Section academic unit
+  sectionName       String?         @db.VarChar(100)  // e.g., "Section A", "Section B"
+  
   // Course association
   courseId          String?
   course            Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
@@ -895,11 +950,22 @@ model Student {
   fees                StudentFee[]
   assignmentSubmissions AssignmentSubmission[]
   groupMemberships    StudentGroupMember[]
+  examAttendance      ExamAttendance[]
+  examSummaries       StudentExamSummary[]
+  hallTickets         ExamHallTicket[]
+  answerSheets        ExamAnswerSheet[]
+  performanceComparisons ExamPerformanceComparison[]
+  
+  // Exam Timetable System Relations
+  admitCards         AdmitCard[]      @relation("StudentAdmitCards")
+  examSlotAttendance ExamSlotAttendance[] @relation("StudentExamSlotAttendance")
+  reportCards        ReportCard[]     @relation("StudentReportCards")
   
   @@unique([schoolId, admissionNumber])
   @@index([schoolId, status])
   @@index([schoolId, academicYearId])
   @@index([schoolId, academicUnitId])
+  @@index([schoolId, classId])
   @@index([courseId])
   @@index([userId])
   @@map("students")
@@ -1385,18 +1451,46 @@ enum ExamType {
   MID_TERM
   FINAL
   PRACTICAL
+  ORAL
+  VIVA
   PROJECT
   ASSIGNMENT
   MOCK_TEST
   ENTRANCE_TEST
+  INTERNAL_ASSESSMENT
+  SEMESTER_EXAM
+  LAB_EXAM
+  ACTIVITY_BASED
+  WEEKLY_TEST
+  PRACTICE_TEST
+  COMPETITIVE_PATTERN
 }
 
 enum ExamStatus {
+  DRAFT
   SCHEDULED
   ONGOING
   COMPLETED
+  MARKS_ENTRY_IN_PROGRESS
+  MARKS_ENTRY_COMPLETED
   RESULTS_PUBLISHED
   CANCELLED
+  ARCHIVED
+}
+
+enum EvaluationType {
+  MARKS_BASED
+  GRADE_BASED
+  PERCENTAGE_BASED
+  CREDIT_BASED
+  PASS_FAIL
+  DESCRIPTIVE
+}
+
+enum ExamMode {
+  OFFLINE
+  ONLINE
+  HYBRID
 }
 
 model Exam {
@@ -1410,8 +1504,13 @@ model Exam {
   academicYearId  String
   academicYear    AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   
+  // Course/Class context
+  courseId        String?         // Optional: for course-specific exams
+  targetClasses   Json            // Array of academicUnitIds this exam applies to
+  
   // Exam details
   name            String          @db.VarChar(255)  // e.g., "Mid-Term Examination 2025-26"
+  code            String?         @db.VarChar(50)   // Unique exam code
   description     String?         @db.Text
   examType        ExamType        @default(MID_TERM)
   
@@ -1419,9 +1518,20 @@ model Exam {
   startDate       DateTime
   endDate         DateTime
   
+  // Evaluation Configuration
+  evaluationType  EvaluationType  @default(MARKS_BASED)
+  examMode        ExamMode        @default(OFFLINE)
+  
+  // Passing criteria
+  overallPassingPercentage Float? @default(33)
+  subjectWisePassing      Boolean @default(true)  // Must pass each subject individually
+  
   // Status
-  status          ExamStatus      @default(SCHEDULED)
+  status          ExamStatus      @default(DRAFT)
+  publishedAt     DateTime?       // When exam was published/scheduled
+  publishedBy     String?         // User ID who published
   resultsPublishedAt DateTime?
+  resultsPublishedBy String?      // User ID who published results
   
   // Grading configuration
   gradingSystem   Json?           // {A+: {min: 90, max: 100}, A: {min: 80, max: 89}, ...}
@@ -1430,6 +1540,15 @@ model Exam {
   showRank        Boolean         @default(false)
   showPercentage  Boolean         @default(true)
   showGrade       Boolean         @default(true)
+  allowMarksCorrection Boolean    @default(false)
+  correctionDeadline   DateTime?  // After this, no corrections allowed
+  
+  // Weightage (for term calculation)
+  weightage       Float?          @default(100)  // Percentage weightage in final result
+  
+  // Metadata
+  instructions    String?         @db.Text
+  createdBy       String?         // User ID who created
   
   // Timestamps
   createdAt       DateTime        @default(now())
@@ -1438,7 +1557,20 @@ model Exam {
   // Relations
   schedules       ExamSchedule[]
   results         ExamResult[]
+  reportCards     ReportCard[]
+  marksEntryLogs  MarksEntryLog[]
+  attendance      ExamAttendance[]
+  summaries       StudentExamSummary[]
+  notifications   ExamNotification[]
+  hallTickets     ExamHallTicket[]
+  questionPapers  ExamQuestionPaper[]
+  answerSheets    ExamAnswerSheet[]
+  currentExamComparisons ExamPerformanceComparison[] @relation("CurrentExam")
+  previousExamComparisons ExamPerformanceComparison[] @relation("PreviousExam")
+  seatingArrangements ExamSeatingArrangement[]
+  insights        ExamInsight[]
   
+  @@unique([schoolId, academicYearId, code])
   @@index([schoolId, academicYearId])
   @@index([status])
   @@map("exams")
@@ -1467,13 +1599,26 @@ model ExamSchedule {
   
   // Venue
   room            String?       @db.VarChar(50)
+  center          String?       @db.VarChar(100)  // Exam center name
   
-  // Marks
+  // Marks Configuration
   maxMarks        Int           @default(100)
   passingMarks    Int           @default(33)
+  theoryMarks     Int?          // For subjects with theory+practical split
+  practicalMarks  Int?          // For subjects with theory+practical split
+  
+  // Invigilator/Supervisor
+  supervisorId    String?       // Teacher ID
+  invigilators    Json?         // Array of teacher IDs
   
   // Status
   isCompleted     Boolean       @default(false)
+  marksEntryStatus String       @default("PENDING") @db.VarChar(20) // PENDING, IN_PROGRESS, COMPLETED, LOCKED
+  marksEntryLockedAt DateTime?
+  marksEntryLockedBy String?    // User ID who locked marks entry
+  
+  // Instructions
+  instructions    String?       @db.Text
   
   // Timestamps
   createdAt       DateTime      @default(now())
@@ -1481,11 +1626,16 @@ model ExamSchedule {
   
   // Relations
   results         ExamResult[]
+  attendance      ExamAttendance[]
+  questionPapers  ExamQuestionPaper[]
+  answerSheets    ExamAnswerSheet[]
+  invigilatorDuties InvigilatorDuty[]
   
   @@unique([examId, subjectId, academicUnitId])
   @@index([examId])
   @@index([academicUnitId])
   @@index([examDate])
+  @@index([marksEntryStatus])
   @@map("exam_schedules")
 }
 
@@ -1509,31 +1659,786 @@ model ExamResult {
   // Marks
   maxMarks        Int           @default(100)
   marksObtained   Float?
+  theoryMarks     Float?        // For theory component
+  practicalMarks  Float?        // For practical component
   percentage      Float?
   grade           String?       @db.VarChar(10)
   
+  // Pass/Fail
+  isPassed        Boolean?      // null = not evaluated, true = passed, false = failed
+  
   // Rank within class (optional)
   classRank       Int?
+  overallRank     Int?          // Rank across all classes in same exam
   
   // Status
   isAbsent        Boolean       @default(false)
   remarks         String?       @db.VarChar(255)
+  teacherRemarks  String?       @db.Text
   
   // Entry tracking
-  enteredBy       String?
+  enteredBy       String?       // User ID who entered marks
   enteredAt       DateTime      @default(now())
+  
+  // Draft/Submit workflow
+  isDraft         Boolean       @default(true)
+  submittedAt     DateTime?     // When marks were submitted (locked)
+  submittedBy     String?       // User ID who submitted
+  
+  // Verification
   verifiedBy      String?
   verifiedAt      DateTime?
+  
+  // Correction tracking
+  isCorrected     Boolean       @default(false)
+  correctionCount Int           @default(0)
+  lastCorrectedAt DateTime?
+  lastCorrectedBy String?
+  
+  // Grace marks
+  graceMarks      Float?        @default(0)
+  graceReason     String?       @db.VarChar(255)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  corrections     MarksCorrection[]
+  
+  // Exam Timetable System Relations
+  changeRequests  MarksChangeRequest[] @relation("ResultChangeRequests")
+  
+  @@unique([examId, studentId, subjectId])
+  @@index([examId])
+  @@index([studentId])
+  @@index([subjectId])
+  @@index([isDraft])
+  @@index([isPassed])
+  @@map("exam_results")
+}
+
+// Marks Correction Audit Trail
+model MarksCorrection {
+  id              String        @id @default(cuid())
+  
+  // Result reference
+  examResultId    String
+  examResult      ExamResult    @relation(fields: [examResultId], references: [id], onDelete: Cascade)
+  
+  // Previous values
+  previousMarks   Float?
+  previousTheoryMarks Float?
+  previousPracticalMarks Float?
+  previousGrade   String?       @db.VarChar(10)
+  
+  // New values
+  newMarks        Float?
+  newTheoryMarks  Float?
+  newPracticalMarks Float?
+  newGrade        String?       @db.VarChar(10)
+  
+  // Correction details
+  reason          String        @db.Text
+  correctionType  String        @db.VarChar(50)  // ENTRY_ERROR, REVALUATION, GRACE_MARKS, ADMIN_OVERRIDE
+  
+  // Approval workflow
+  requestedBy     String        // User ID who requested correction
+  requestedAt     DateTime      @default(now())
+  approvalStatus  String        @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  approvedBy      String?       // User ID who approved/rejected
+  approvedAt      DateTime?
+  rejectionReason String?       @db.Text
+  
+  @@index([examResultId])
+  @@index([approvalStatus])
+  @@map("marks_corrections")
+}
+
+// Marks Entry Activity Log
+model MarksEntryLog {
+  id              String        @id @default(cuid())
+  
+  // Exam reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Activity details
+  action          String        @db.VarChar(50)  // MARKS_ENTERED, MARKS_UPDATED, MARKS_SUBMITTED, MARKS_LOCKED, MARKS_CORRECTED
+  entityType      String        @db.VarChar(50)  // EXAM_RESULT, EXAM_SCHEDULE
+  entityId        String        // ID of the entity affected
+  
+  // Details
+  description     String?       @db.Text
+  metadata        Json?         // Additional data about the action
+  
+  // Who performed the action
+  performedBy     String        // User ID
+  performedAt     DateTime      @default(now())
+  
+  // IP tracking
+  ipAddress       String?       @db.VarChar(50)
+  
+  @@index([examId, performedAt])
+  @@index([performedBy])
+  @@index([action])
+  @@map("marks_entry_logs")
+}
+
+// Report Card Generation
+enum ReportCardType {
+  EXAM_WISE
+  TERM_WISE
+  ANNUAL
+  PROGRESS_REPORT
+  TRANSCRIPT
+}
+
+enum ReportCardStatus {
+  DRAFT
+  GENERATED
+  PUBLISHED
+  ARCHIVED
+}
+
+model ReportCard {
+  id              String            @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School            @relation("SchoolReportCards", fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Student
+  studentId       String
+  student         Student           @relation("StudentReportCards", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Exam reference (can be multiple exams for term/annual reports)
+  examId          String?
+  exam            Exam?             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examIds         Json?             // Array of exam IDs for consolidated reports
+  
+  // Exam Timetable reference (optional)
+  timetableId     String?
+  timetable       ExamTimetable?    @relation("TimetableReportCards", fields: [timetableId], references: [id], onDelete: SetNull)
+  
+  // Academic context
+  academicYearId  String
+  academicYear    AcademicYear      @relation("AcademicYearReportCards", fields: [academicYearId], references: [id], onDelete: Cascade)
+  academicUnitId  String            // Class/Section
+  
+  // Report details
+  reportCardType  ReportCardType    @default(EXAM_WISE)
+  title           String            @db.VarChar(255)
+  reportPeriod    String            @db.VarChar(100)  // e.g., "First Term 2024-25"
+  
+  // Content
+  resultsData     Json              // Consolidated results data
+  attendanceData  Json?             // Attendance summary
+  remarksData     Json?             // Teacher remarks, principal remarks
+  
+  // File
+  fileUrl         String?           @db.VarChar(500)  // PDF URL
+  fileSize        Int?              // Size in bytes
+  
+  // Status
+  status          ReportCardStatus  @default(DRAFT)
+  generatedAt     DateTime?
+  generatedBy     String?           // User ID who generated
+  generator       User?             @relation("ReportCardGenerator", fields: [generatedBy], references: [id])
+  publishedAt     DateTime?
+  publishedBy     String?           // User ID who published
+  
+  // Download tracking
+  downloadCount   Int               @default(0)
+  lastDownloadedAt DateTime?
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  @@index([schoolId, studentId])
+  @@index([examId])
+  @@index([timetableId])
+  @@index([academicYearId])
+  @@index([status])
+  @@map("report_cards")
+}
+
+// Exam Analytics & Performance Tracking
+model ExamAnalytics {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  
+  // Exam reference
+  examId          String
+  
+  // Academic context
+  academicUnitId  String?       // Null for school-wide analytics
+  subjectId       String?       // Null for overall analytics
+  
+  // Analytics data
+  totalStudents   Int           @default(0)
+  appearedStudents Int          @default(0)
+  absentStudents  Int           @default(0)
+  passedStudents  Int           @default(0)
+  failedStudents  Int           @default(0)
+  
+  // Marks statistics
+  highestMarks    Float?
+  lowestMarks     Float?
+  averageMarks    Float?
+  medianMarks     Float?
+  
+  // Grade distribution
+  gradeDistribution Json?       // {A+: 10, A: 20, B: 30, ...}
+  
+  // Performance bands
+  above90         Int           @default(0)
+  between75And90  Int           @default(0)
+  between60And75  Int           @default(0)
+  between33And60  Int           @default(0)
+  below33         Int           @default(0)
+  
+  // Comparison data
+  previousExamAverage Float?    // For trend analysis
+  improvementPercentage Float?
+  
+  // Calculated at
+  calculatedAt    DateTime      @default(now())
+  
+  @@unique([examId, academicUnitId, subjectId])
+  @@index([schoolId, examId])
+  @@map("exam_analytics")
+}
+
+// Exam Attendance Tracking
+model ExamAttendance {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam and Schedule reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examScheduleId  String
+  examSchedule    ExamSchedule  @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Attendance details
+  isPresent       Boolean       @default(false)
+  arrivalTime     DateTime?
+  departureTime   DateTime?
+  
+  // Additional info
+  lateArrival     Boolean       @default(false)
+  earlyDeparture  Boolean       @default(false)
+  remarks         String?       @db.Text
+  
+  // Marked by
+  markedBy        String        // Teacher/Invigilator user ID
+  markedAt        DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([examScheduleId, studentId])
+  @@index([examId, studentId])
+  @@index([examScheduleId])
+  @@index([markedBy])
+  @@map("exam_attendance")
+}
+
+// Student Exam Summary (by teacher)
+model StudentExamSummary {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Subject reference (optional - for subject-wise summary)
+  subjectId       String?
+  subject         Subject?      @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  
+  // Summary details
+  overallPerformance String     @db.VarChar(50) // EXCELLENT, GOOD, AVERAGE, BELOW_AVERAGE, POOR
+  strengths       String?       @db.Text
+  weaknesses      String?       @db.Text
+  recommendations String?       @db.Text
+  behaviorRemarks String?       @db.Text
+  
+  // Ratings (1-5 scale)
+  preparednessRating Int?       @db.SmallInt
+  participationRating Int?      @db.SmallInt
+  disciplineRating Int?         @db.SmallInt
+  
+  // Created by teacher
+  teacherId       String
+  teacher         Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   
   // Timestamps
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
   @@unique([examId, studentId, subjectId])
-  @@index([examId])
+  @@index([examId, teacherId])
   @@index([studentId])
-  @@index([subjectId])
-  @@map("exam_results")
+  @@map("student_exam_summaries")
+}
+
+// Exam Notifications
+enum ExamNotificationType {
+  SCHEDULE_PUBLISHED
+  SCHEDULE_UPDATED
+  EXAM_REMINDER
+  MARKS_PUBLISHED
+  RESULT_PUBLISHED
+  REPORT_CARD_READY
+  EXAM_CANCELLED
+  EXAM_RESCHEDULED
+  ATTENDANCE_MARKED
+}
+
+model ExamNotification {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam reference
+  examId          String?
+  exam            Exam?         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Notification details
+  type            ExamNotificationType
+  title           String        @db.VarChar(255)
+  message         String        @db.Text
+  
+  // Target users
+  recipientType   String        @db.VarChar(50) // STUDENT, PARENT, TEACHER, ALL_STUDENTS, SPECIFIC_CLASS
+  recipientId     String?       // Specific user ID if targeted
+  academicUnitId  String?       // If targeting specific class
+  
+  // Delivery channels
+  sendEmail       Boolean       @default(true)
+  sendInApp       Boolean       @default(true)
+  sendSMS         Boolean       @default(false)
+  
+  // Status tracking
+  isRead          Boolean       @default(false)
+  readAt          DateTime?
+  emailSent       Boolean       @default(false)
+  emailSentAt     DateTime?
+  smsSent         Boolean       @default(false)
+  smsSentAt       DateTime?
+  
+  // Metadata
+  metadata        Json?         // Additional data (exam schedule details, etc.)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  scheduledFor    DateTime?     // For scheduled notifications (reminders)
+  
+  @@index([schoolId, recipientId, isRead])
+  @@index([examId])
+  @@index([type, createdAt])
+  @@index([scheduledFor])
+  @@map("exam_notifications")
+}
+
+// Exam Hall Ticket
+model ExamHallTicket {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Hall ticket details
+  hallTicketNumber String       @unique @db.VarChar(50)
+  
+  // Seating arrangement
+  examCenter      String?       @db.VarChar(255)
+  roomNumber      String?       @db.VarChar(100)
+  seatNumber      String?       @db.VarChar(50)
+  
+  // Instructions
+  instructions    String?       @db.Text
+  reportingTime   DateTime?
+  
+  // Status
+  isGenerated     Boolean       @default(false)
+  generatedAt     DateTime?
+  isDownloaded    Boolean       @default(false)
+  downloadedAt    DateTime?
+  downloadCount   Int           @default(0)
+  
+  // QR Code for verification
+  qrCode          String?       @db.Text
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([examId, studentId])
+  @@index([hallTicketNumber])
+  @@index([examId])
+  @@map("exam_hall_tickets")
+}
+
+// Exam Question Paper Management
+model ExamQuestionPaper {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam and Schedule reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examScheduleId  String
+  examSchedule    ExamSchedule  @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  
+  // Paper details
+  title           String        @db.VarChar(255)
+  paperCode       String?       @db.VarChar(50)
+  setNumber       String?       @db.VarChar(10) // Set A, B, C for multiple sets
+  
+  // File details
+  fileUrl         String        @db.Text
+  fileName        String        @db.VarChar(255)
+  fileSize        Int?          // in bytes
+  fileType        String?       @db.VarChar(50)
+  
+  // Security
+  isConfidential  Boolean       @default(true)
+  password        String?       @db.VarChar(255)
+  
+  // Access control
+  uploadedBy      String        // Teacher/Admin user ID
+  uploadedAt      DateTime      @default(now())
+  
+  // Status
+  status          String        @default("DRAFT") @db.VarChar(50) // DRAFT, APPROVED, PUBLISHED
+  approvedBy      String?
+  approvedAt      DateTime?
+  
+  @@index([examScheduleId])
+  @@index([examId])
+  @@map("exam_question_papers")
+}
+
+// Exam Answer Sheet Management
+model ExamAnswerSheet {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam and Schedule reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examScheduleId  String
+  examSchedule    ExamSchedule  @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Answer sheet details
+  sheetNumber     String?       @db.VarChar(50)
+  
+  // File upload (scanned copy)
+  fileUrl         String?       @db.Text
+  fileName        String?       @db.VarChar(255)
+  fileSize        Int?
+  
+  // Submission details
+  isSubmitted     Boolean       @default(false)
+  submittedAt     DateTime?
+  submissionMode  String?       @db.VarChar(50) // PHYSICAL, ONLINE, HYBRID
+  
+  // Evaluation tracking
+  assignedTo      String?       // Teacher ID for evaluation
+  assignedAt      DateTime?
+  evaluationStatus String       @default("PENDING") @db.VarChar(50) // PENDING, IN_PROGRESS, COMPLETED
+  evaluatedAt     DateTime?
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([examScheduleId, studentId])
+  @@index([examId, studentId])
+  @@index([assignedTo, evaluationStatus])
+  @@map("exam_answer_sheets")
+}
+
+// Grade Boundaries and Grading Scheme
+model GradingScheme {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Scheme details
+  name            String        @db.VarChar(255)
+  description     String?       @db.Text
+  
+  // Grade boundaries (JSON array)
+  // [{grade: "A+", minPercentage: 90, maxPercentage: 100, gradePoint: 10, description: "Outstanding"}]
+  boundaries      Json
+  
+  // Settings
+  isDefault       Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  
+  // Applicable to
+  applicableExamTypes Json?     // Array of exam types this scheme applies to
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([schoolId, isActive])
+  @@map("grading_schemes")
+}
+
+// Exam Performance Comparison
+model ExamPerformanceComparison {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Student reference
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Subject reference
+  subjectId       String
+  subject         Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  // Current exam
+  currentExamId   String
+  currentExam     Exam          @relation("CurrentExam", fields: [currentExamId], references: [id], onDelete: Cascade)
+  currentMarks    Float
+  currentPercentage Float
+  
+  // Previous exam
+  previousExamId  String?
+  previousExam    Exam?         @relation("PreviousExam", fields: [previousExamId], references: [id], onDelete: SetNull)
+  previousMarks   Float?
+  previousPercentage Float?
+  
+  // Comparison metrics
+  marksImprovement Float?       // Difference in marks
+  percentageImprovement Float?  // Difference in percentage
+  rankImprovement Int?          // Difference in rank
+  trend           String        @db.VarChar(20) // IMPROVING, DECLINING, STABLE
+  
+  // Analysis
+  performanceLevel String       @db.VarChar(50) // EXCELLENT, GOOD, AVERAGE, NEEDS_IMPROVEMENT
+  recommendations String?       @db.Text
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  
+  @@unique([studentId, subjectId, currentExamId])
+  @@index([schoolId, studentId])
+  @@index([currentExamId])
+  @@map("exam_performance_comparisons")
+}
+
+// Exam Seating Arrangement
+model ExamSeatingArrangement {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Venue details
+  venueName       String        @db.VarChar(255)
+  roomNumber      String        @db.VarChar(100)
+  capacity        Int
+  
+  // Seating configuration
+  rowsCount       Int
+  seatsPerRow     Int
+  
+  // Seating plan (JSON)
+  // [{row: 1, seat: 1, studentId: "xxx", rollNumber: "001"}]
+  seatingPlan     Json
+  
+  // Settings
+  alternateSeating Boolean      @default(true) // Alternate students from different classes
+  randomSeating   Boolean       @default(false)
+  
+  // Status
+  isGenerated     Boolean       @default(false)
+  generatedAt     DateTime?
+  generatedBy     String?       // User ID
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([examId])
+  @@index([schoolId])
+  @@map("exam_seating_arrangements")
+}
+
+// Invigilator Duty Roster
+model InvigilatorDuty {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam schedule reference
+  examScheduleId  String
+  examSchedule    ExamSchedule  @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  
+  // Teacher reference
+  teacherId       String
+  teacher         Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  // Duty details
+  dutyType        String        @db.VarChar(50) // CHIEF_INVIGILATOR, INVIGILATOR, RELIEF_INVIGILATOR
+  venueName       String?       @db.VarChar(255)
+  roomNumber      String?       @db.VarChar(100)
+  
+  // Time
+  startTime       DateTime
+  endTime         DateTime
+  
+  // Status
+  status          String        @default("ASSIGNED") @db.VarChar(50) // ASSIGNED, CONFIRMED, COMPLETED, ABSENT
+  confirmedAt     DateTime?
+  
+  // Notes
+  specialInstructions String?   @db.Text
+  remarks         String?       @db.Text
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([examScheduleId, teacherId])
+  @@index([teacherId, status])
+  @@index([examScheduleId])
+  @@map("invigilator_duties")
+}
+
+// Notification Preferences
+model NotificationPreference {
+  id              String        @id @default(cuid())
+  
+  // User reference
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Email preferences
+  emailEnabled    Boolean       @default(true)
+  emailExamSchedule Boolean     @default(true)
+  emailExamReminder Boolean     @default(true)
+  emailMarksPublished Boolean   @default(true)
+  emailResultPublished Boolean  @default(true)
+  emailReportCard Boolean       @default(true)
+  
+  // In-app preferences
+  inAppEnabled    Boolean       @default(true)
+  inAppExamSchedule Boolean     @default(true)
+  inAppExamReminder Boolean     @default(true)
+  inAppMarksPublished Boolean   @default(true)
+  inAppResultPublished Boolean  @default(true)
+  
+  // SMS preferences
+  smsEnabled      Boolean       @default(false)
+  smsExamReminder Boolean       @default(false)
+  smsResultPublished Boolean    @default(false)
+  
+  // Reminder timing preferences
+  reminderDaysBefore Json?      // Array of days [7, 3, 1]
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@map("notification_preferences")
+}
+
+// Exam Statistics and Insights
+model ExamInsight {
+  id              String        @id @default(cuid())
+  
+  // Tenant isolation
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Exam reference
+  examId          String
+  exam            Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Insight type
+  insightType     String        @db.VarChar(100) // DIFFICULTY_ANALYSIS, PERFORMANCE_TREND, SUBJECT_COMPARISON, etc.
+  
+  // Insight data
+  title           String        @db.VarChar(255)
+  description     String        @db.Text
+  
+  // Metrics (JSON)
+  metrics         Json          // Detailed metrics and data
+  
+  // Severity/Priority
+  severity        String?       @db.VarChar(50) // HIGH, MEDIUM, LOW
+  
+  // Recommendations
+  recommendations String?       @db.Text
+  
+  // Status
+  isActionable    Boolean       @default(false)
+  isResolved      Boolean       @default(false)
+  resolvedAt      DateTime?
+  
+  // Timestamps
+  generatedAt     DateTime      @default(now())
+  
+  @@index([examId, insightType])
+  @@index([schoolId, isResolved])
+  @@map("exam_insights")
 }
 
 // ============================================
@@ -2768,6 +3673,12 @@ model ClassTeacher {
   academicUnitId  String
   academicUnit    AcademicUnit  @relation(fields: [academicUnitId], references: [id], onDelete: Cascade)
   
+  // Separate Class and Section fields for better organization
+  classId         String?       // Parent class ID (e.g., "Class 5")
+  sectionId       String?       // Section ID (e.g., "Section A")
+  className       String?       @db.VarChar(100)  // Denormalized class name for display
+  sectionName     String?       @db.VarChar(100)  // Denormalized section name for display
+  
   // Teacher
   teacherId       String
   teacher         Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
@@ -2796,6 +3707,7 @@ model ClassTeacher {
   @@index([teacherId, academicYearId])
   @@index([academicUnitId, isActive])
   @@index([academicUnitId, academicYearId, isPrimary])
+  @@index([classId, sectionId])
   @@map("class_teachers")
 }
 
@@ -2881,4 +3793,270 @@ model TeacherAssignmentHistory {
   @@index([schoolId, changedAt])
   @@index([assignmentCategory, assignmentId])
   @@map("teacher_assignment_history")
+}
+
+// ============================================
+// EXAM TIMETABLE MANAGEMENT SYSTEM
+// ============================================
+
+model ExamTimetable {
+  id              String   @id @default(cuid())
+  
+  schoolId        String
+  school          School   @relation("SchoolExamTimetables", fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  academicYearId  String
+  academicYear    AcademicYear @relation("AcademicYearTimetables", fields: [academicYearId], references: [id], onDelete: Cascade)
+  
+  academicUnitId  String
+  academicUnit    AcademicUnit @relation("AcademicUnitTimetables", fields: [academicUnitId], references: [id], onDelete: Cascade)
+  
+  // Separate class and section for better organization
+  classId         String?
+  className       String?  @db.VarChar(100)
+  sectionId       String?
+  sectionName     String?  @db.VarChar(100)
+  
+  examName        String   @db.VarChar(255)
+  description     String?  @db.Text
+  startDate       DateTime
+  endDate         DateTime
+  
+  status          String   @default("DRAFT") @db.VarChar(20)
+  
+  publishedAt     DateTime?
+  publishedBy     String?
+  publisher       User?    @relation("TimetablePublisher", fields: [publishedBy], references: [id])
+  
+  createdBy       String
+  creator         User     @relation("TimetableCreator", fields: [createdBy], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  slots           ExamTimetableSlot[]
+  admitCards      AdmitCard[]
+  timetableNotifications ExamTimetableNotification[]
+  reportCards     ReportCard[]        @relation("TimetableReportCards")
+  
+  @@index([schoolId, academicYearId])
+  @@index([academicUnitId, status])
+  @@index([schoolId, classId])
+  @@index([startDate, endDate])
+  @@map("exam_timetables")
+}
+
+model ExamTimetableSlot {
+  id              String   @id @default(cuid())
+  
+  timetableId     String
+  timetable       ExamTimetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  
+  slotOrder       Int
+  examDate        DateTime
+  startTime       String   @db.VarChar(10)
+  endTime         String   @db.VarChar(10)
+  
+  subjectId       String?
+  subject         Subject? @relation("SlotSubject", fields: [subjectId], references: [id])
+  
+  maxMarks        Int?
+  minMarks        Int?
+  
+  supervisorId    String?
+  supervisor      Teacher? @relation("SlotSupervisor", fields: [supervisorId], references: [id])
+  supervisorName  String?  @db.VarChar(255)
+  
+  type            String   @db.VarChar(20)
+  
+  room            String?  @db.VarChar(100)
+  instructions    String?  @db.Text
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  slotAttendance  ExamSlotAttendance[]
+  
+  @@index([timetableId, slotOrder])
+  @@index([examDate])
+  @@index([subjectId])
+  @@map("exam_timetable_slots")
+}
+
+model AdmitCard {
+  id              String   @id @default(cuid())
+  
+  timetableId     String
+  timetable       ExamTimetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  
+  studentId       String
+  student         Student  @relation("StudentAdmitCards", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  hallTicketNo    String   @unique @db.VarChar(50)
+  
+  examCenter      String?  @db.VarChar(255)
+  roomNumber      String?  @db.VarChar(50)
+  seatNumber      String?  @db.VarChar(50)
+  reportingTime   String?  @db.VarChar(10)
+  
+  instructions    String?  @db.Text
+  
+  pdfUrl          String?  @db.VarChar(500)
+  generatedAt     DateTime?
+  
+  downloadCount   Int      @default(0)
+  lastDownloadAt  DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([timetableId])
+  @@index([studentId])
+  @@index([hallTicketNo])
+  @@map("admit_cards")
+}
+
+model ExamSlotAttendance {
+  id              String   @id @default(cuid())
+  
+  slotId          String
+  slot            ExamTimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  
+  studentId       String
+  student         Student  @relation("StudentExamSlotAttendance", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  status          String   @db.VarChar(20)
+  
+  photoUrl        String?  @db.VarChar(500)
+  
+  markedBy        String
+  marker          User     @relation("AttendanceMarker", fields: [markedBy], references: [id])
+  
+  remarks         String?  @db.VarChar(500)
+  markedAt        DateTime @default(now())
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([slotId, studentId])
+  @@index([slotId])
+  @@index([studentId])
+  @@index([status])
+  @@map("exam_slot_attendance")
+}
+
+model ExamTimetableNotification {
+  id              String   @id @default(cuid())
+  
+  timetableId     String
+  timetable       ExamTimetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User     @relation("ExamTimetableNotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  
+  type            String   @db.VarChar(50)
+  title           String   @db.VarChar(255)
+  message         String   @db.Text
+  
+  sentViaApp      Boolean  @default(false)
+  sentViaEmail    Boolean  @default(false)
+  sentViaSMS      Boolean  @default(false)
+  
+  emailSentAt     DateTime?
+  emailStatus     String?  @db.VarChar(20)
+  
+  isRead          Boolean  @default(false)
+  readAt          DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([userId, isRead])
+  @@index([timetableId])
+  @@index([type])
+  @@map("exam_timetable_notifications")
+}
+
+model MarksChangeRequest {
+  id              String   @id @default(cuid())
+  
+  resultId        String
+  result          ExamResult @relation("ResultChangeRequests", fields: [resultId], references: [id], onDelete: Cascade)
+  
+  requestedBy     String
+  requester       User     @relation("MarksChangeRequester", fields: [requestedBy], references: [id])
+  
+  oldMarks        Float
+  newMarks        Float
+  reason          String   @db.Text
+  
+  status          String   @default("PENDING") @db.VarChar(20)
+  
+  approvedBy      String?
+  approver        User?    @relation("MarksChangeApprover", fields: [approvedBy], references: [id])
+  
+  approvalRemarks String?  @db.Text
+  approvedAt      DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([resultId])
+  @@index([requestedBy])
+  @@index([status])
+  @@map("marks_change_requests")
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  
+  schoolId        String
+  school          School   @relation("SchoolAuditLogs", fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  entityType      String   @db.VarChar(50)
+  entityId        String   @db.VarChar(255)
+  
+  action          String   @db.VarChar(50)
+  
+  userId          String
+  user            User     @relation("AuditLogUser", fields: [userId], references: [id])
+  
+  oldValue        Json?
+  newValue        Json?
+  
+  ipAddress       String?  @db.VarChar(50)
+  userAgent       String?  @db.VarChar(500)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([schoolId, entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model InstitutionSignature {
+  id              String   @id @default(cuid())
+  
+  schoolId        String
+  school          School   @relation("SchoolSignatures", fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  type            String   @db.VarChar(50)
+  
+  teacherId       String?
+  teacher         Teacher? @relation("TeacherSignatures", fields: [teacherId], references: [id])
+  
+  imageUrl        String   @db.VarChar(500)
+  
+  uploadedBy      String
+  uploader        User     @relation("SignatureUploader", fields: [uploadedBy], references: [id])
+  
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([schoolId, type, isActive])
+  @@index([teacherId])
+  @@map("institution_signatures")
 }

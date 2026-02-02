@@ -9,8 +9,11 @@ import '../screens/student/student_attendance_screen.dart';
 import '../screens/student/student_homework_screen.dart';
 import '../screens/student/student_timetable_screen.dart';
 import '../screens/student/student_exams_screen.dart';
-import '../screens/student/student_results_screen.dart';
 import '../screens/student/student_notices_screen.dart';
+import '../screens/student/student_resources_screen.dart';
+import '../screens/teacher/teacher_assignments_screen.dart';
+import '../screens/teacher/create_assignment_screen.dart';
+import '../screens/teacher/attendance_report_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
@@ -72,7 +75,13 @@ class AppDrawer extends StatelessWidget {
                     activeIcon: Icons.bar_chart,
                     title: 'Attendance Report',
                     isSelected: currentRoute == '/attendance-report',
-                    onTap: () {}, // Placeholder
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AttendanceReportScreen()),
+                      );
+                    },
                   ),
                   _buildExpansionTile(
                     context,
@@ -80,8 +89,28 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.assignment_outlined,
                     activeIcon: Icons.assignment,
                     children: [
-                      _buildDrawerSubItem(context, title: 'All Assignments', onTap: () {}),
-                      _buildDrawerSubItem(context, title: 'Create Assignment', onTap: () {}),
+                      _buildDrawerSubItem(
+                        context, 
+                        title: 'All Assignments', 
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TeacherAssignmentsScreen()),
+                          );
+                        }
+                      ),
+                      _buildDrawerSubItem(
+                        context, 
+                        title: 'Create Assignment', 
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const CreateAssignmentScreen()),
+                          );
+                        }
+                      ),
                     ],
                   ),
                   _buildExpansionTile(
@@ -145,6 +174,14 @@ class AppDrawer extends StatelessWidget {
                     title: 'Homework',
                     isSelected: currentRoute == '/homework',
                     onTap: () => _navigate(context, const StudentHomeworkScreen(), '/homework'),
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.menu_book_outlined,
+                    activeIcon: Icons.menu_book,
+                    title: 'Resources',
+                    isSelected: currentRoute == '/student-resources',
+                    onTap: () => _navigate(context, const StudentResourcesScreen(), '/student-resources'),
                   ),
                   _buildDrawerItem(
                     context,
