@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardHeader } from "@/components/dashboard/header";
@@ -37,7 +37,7 @@ interface ExamSchedule {
   };
 }
 
-export default function TeacherMarksEntryPage() {
+function MarksEntryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const scheduleId = searchParams.get("scheduleId");
@@ -404,5 +404,26 @@ export default function TeacherMarksEntryPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function TeacherMarksEntryPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+        <DashboardSidebar />
+        <DashboardHeader />
+        <main className="ml-64 pt-16">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    }>
+      <MarksEntryContent />
+    </Suspense>
   );
 }
